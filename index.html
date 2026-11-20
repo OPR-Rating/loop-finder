@@ -106,6 +106,9 @@ ul.plain{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
 .ci-list{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}
 .ci-list li{display:flex;flex-wrap:wrap;gap:6px;align-items:center;border-left:3px solid var(--line);padding-left:10px}
 .ci-list li .first{flex-basis:100%}
+.dotswrap{border:1px dashed var(--line);border-radius:14px;background:var(--bg);overflow:hidden}
+.dsvg{width:100%;max-width:520px;height:auto;display:block;margin:0 auto;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.dtools{display:flex;flex-direction:column;gap:8px}
 .ownbar{font-size:13px;color:var(--accent);background:var(--accent-soft);border-radius:10px;padding:8px 12px}
 @media (prefers-reduced-motion:no-preference){.spin{animation:sp 1.2s linear infinite;display:inline-block}@keyframes sp{to{transform:rotate(360deg)}}}
 </style>
@@ -239,7 +242,7 @@ function simpleView(d){
    +'</div>';
 }
 function detailedView(d){
-  return mindCard()+'<div class="card"><span class="eyebrow">All the loops</span><p>'+esc(d.one_liner)+'</p><div class="loops">'
+  return mindCard()+dotsCard()+'<div class="card"><span class="eyebrow">All the loops</span><p>'+esc(d.one_liner)+'</p><div class="loops">'
    +d.loops.map(function(L){return '<div class="card" style="padding:14px"><div class="row"><h3>'+esc(L.name)+'</h3><span class="tag '+(L.type==="B"?"B":"R")+'">'+(L.type==="B"?"Balancing: holds you back":"Reinforcing: snowballs")+'</span></div><div class="ringwrap">'+ring(L)+'</div><p class="first">'+esc(L.story)+'</p></div>';}).join('')
    +'</div><p class="first"><b>+</b> means both move the same way (more leads to more). <b>−</b> means they move opposite ways (more leads to less).</p></div>'
    +(d.pattern&&d.pattern.name?'<div class="card"><span class="eyebrow">The pattern behind it</span><h3>'+esc(d.pattern.name)+'</h3><p>'+esc(d.pattern.plain)+'</p></div>':'')
@@ -286,7 +289,7 @@ document.getElementById("go").onclick=async function(){
     var r=await fetch(LF_API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text:text}),signal:state.ctl.signal});
     var d=null; try{d=await r.json();}catch(e){}
     if(!r.ok||!valid(d)){var code=(d&&d.error)||"garbled"; setBusy(false,MSG[code]||"Something went wrong. Press Find my loop to try again.",true); return;}
-    state.data=d; state.isSample=false; state.isOwn=false; state.coach=null; state.mind=null; state.ownLoop=null; state.savedId=null; state.answers={}; state.ci={}; state.view="simple"; setBusy(false,"");
+    state.data=d; state.isSample=false; state.isOwn=false; state.coach=null; state.mind=null; state.dots=null; state.ownLoop=null; state.savedId=null; state.answers={}; state.ci={}; state.view="simple"; setBusy(false,"");
     render(); document.getElementById("result").scrollIntoView({behavior:"smooth",block:"start"});
   }catch(e){
     if(e&&e.name==="AbortError"){setBusy(false,"Stopped.");return;}
@@ -347,7 +350,7 @@ var QS=[
   options:function(){return [["10","Very sure (9–10)",""],["8","Fairly sure (7–8)",""],["6","Not very sure (5–6)",""],["3","Unlikely (1–4)",""]];}},
  {k:"name",type:"text",max:30,optional:true,ask:function(){return "Last one: give your loop a name.";},hint:"Optional. Something you'll remember, like “The payday trap”."}
 ];
-function stepsNow(){return ["a","b","c","d"].map(function(k){return (G.ans[k]||"").trim();}).filter(Boolean);}
+function stepsNow(){if(G.dot) return G.dot.steps.slice(); return ["a","b","c","d"].map(function(k){return (G.ans[k]||"").trim();}).filter(Boolean);}
 function startGuide(text){
   G={i:0,ans:{},struggle:text,stage:"mind",mind:mindEmpty()}; G.mind.center=cut(text,60); drawMind();
   var g=document.getElementById("guide"); g.hidden=false; g.scrollIntoView({behavior:"smooth",block:"start"});
@@ -364,7 +367,7 @@ function drawGuide(){
     body='<div class="opts">'+Q.options().map(function(o){return '<button class="optbtn" data-v="'+esc(o[0])+'" aria-pressed="'+(val===o[0])+'">'+esc(o[1])+(o[2]?'<small>'+esc(o[2])+'</small>':'')+'</button>';}).join("")+'</div>';
   }
   var hint=Q.hint?'<p class="first">'+esc(Q.hint).replace("{a}",q("a"))+'</p>':'';
-  g.innerHTML='<div class="prog" aria-hidden="true">'+bars+'</div><span class="eyebrow">Step 2 of 2 \u00b7 Question '+(G.i+1)+' of '+QS.length+'</span>'
+  g.innerHTML='<div class="prog" aria-hidden="true">'+bars+'</div><span class="eyebrow">'+(G.dot?'Step 3 of 3 \u00b7 Almost done':'Question '+(G.i+1)+' of '+QS.length)+'</span>'
    +'<p class="gq">'+Q.ask()+'</p>'+hint+body
    +'<div class="row"><button class="btn" id="gback">Back</button><button class="btn primary" id="gnext">'+(G.i===QS.length-1?'See my loop':'Next')+'</button><span class="status err" id="gerr" aria-live="polite"></span></div>';
   var inp=document.getElementById("gin");
@@ -372,7 +375,7 @@ function drawGuide(){
   Array.prototype.forEach.call(g.querySelectorAll("[data-fill]"),function(c){c.onclick=function(){var i=document.getElementById("gin"); i.value=c.dataset.fill.slice(0,Q.max); i.focus();};});
   Array.prototype.forEach.call(g.querySelectorAll(".optbtn"),function(b){b.onclick=function(){G.ans[Q.k]=b.dataset.v; next();};});
   document.getElementById("gnext").onclick=next;
-  document.getElementById("gback").onclick=function(){saveText(); if(G.i>0){G.i--; drawGuide();} else {G.stage="mind"; drawMind();}};
+  document.getElementById("gback").onclick=function(){saveText(); if(G.dot&&G.i<=qIndex("pat")){startDots();} else if(G.i>0){G.i--; drawGuide();} else {G.stage="mind"; drawMind();}};
 }
 function saveText(){var inp=document.getElementById("gin"); if(inp) G.ans[QS[G.i].k]=inp.value.trim();}
 function next(){
@@ -384,6 +387,7 @@ function next(){
 function finishGuide(){
   var A=G.ans, steps=stepsNow(), type=A.loop==="B"?"B":"R";
   var signs=steps.map(function(_,i){return (type==="B"&&i===steps.length-1)?"-":"+";});
+  if(G.dot){type=G.dot.type; signs=G.dot.signs.slice();}
   var pat=PATTERNS[+A.pat]||PATTERNS[5], conf=+A.conf||0, name=(A.name||"").trim()||"My loop";
   var qs=[];
   if(conf<7) qs.push("You weren't very sure you'd do it. Make the step smaller, until you'd say 7 out of 10 or more.");
@@ -398,7 +402,7 @@ function finishGuide(){
     leverage:[{where:A.lev,move:"Change what happens at “"+A.lev+"”.",first_step:A.act,strength:""}],
     questions:qs, facts_to_check:[], care_note:""
   };
-  state.mind=G.mind;
+  state.mind=G.mind; state.dots=G.dot?G.dotsGraph:null;
   state.ownLoop={struggle:((G.mind&&G.mind.center)||G.struggle||A.a)+mindSummary(G.mind),steps:steps,type:type,pattern:pat.name,lever:A.lev,action:A.act,confidence:A.conf};
   state.coach=null; state.savedId=null; state.answers={}; state.ci={};
   state.isSample=false; state.isOwn=true; state.view="simple";
@@ -514,13 +518,14 @@ function drawMind(){
       +'<p class="first">'+esc(b.hint)+'</p>'+(chips?'<div class="mchips">'+chips+'</div>':'')
       +((m[b.k]||[]).length<6?'<div class="madd"><input class="gin" id="mi-'+b.k+'" maxlength="40" placeholder="Add an idea" aria-label="Add to '+esc(b.label)+'" autocomplete="off"><button class="btn" data-add="'+b.k+'">Add</button></div>':'')+'</div>';
   }).join("");
-  g.innerHTML='<span class="eyebrow">Step 1 of 2 · Unpack it</span>'
+  g.innerHTML='<span class="eyebrow">Step 1 of 3 · Unpack it</span>'
     +'<p class="gq">First, get it all out. Add a few words to any branch.</p>'
     +'<p class="first">There are no wrong answers. Add what comes to mind, and skip any branch that doesn’t fit.</p>'
     +'<label class="eyebrow" for="mcenter">In the middle: your struggle</label>'
     +'<input class="gin" id="mcenter" maxlength="60" value="'+esc(m.center)+'" autocomplete="off">'
     +'<div class="ringwrap">'+mindSvg(m)+'</div>'+rows
-    +'<div class="row"><button class="btn primary" id="mnext">Next: find my loop</button><button class="btn" id="mskip">Skip this step</button></div>';
+    +'<div class="row"><button class="btn primary" id="mnext">Next: connect the dots</button><button class="btn" id="mskip">Quick questions instead</button></div>'
+    +'<p class="first">Connect the dots: you draw what causes what and find your own loops. Quick questions: a few short questions build one loop for you.</p>';
   document.getElementById("mcenter").onchange=function(){m.center=this.value.trim(); drawMind();};
   Array.prototype.forEach.call(g.querySelectorAll("[data-add]"),function(btn){
     var k=btn.dataset.add, inp=document.getElementById("mi-"+k);
@@ -528,8 +533,8 @@ function drawMind(){
     btn.onclick=add; inp.onkeydown=function(e){if(e.key==="Enter"){e.preventDefault();add();}};
   });
   Array.prototype.forEach.call(g.querySelectorAll(".mchip"),function(c){c.onclick=function(){m[c.dataset.b].splice(+c.dataset.i,1); drawMind();};});
-  document.getElementById("mnext").onclick=function(){m.center=document.getElementById("mcenter").value.trim(); G.stage="q"; G.i=0; drawGuide(); document.getElementById("guide").scrollIntoView({behavior:"smooth",block:"start"});};
-  document.getElementById("mskip").onclick=function(){G.mind=mindEmpty(); G.mind.center=m.center; G.stage="q"; G.i=0; drawGuide(); document.getElementById("guide").scrollIntoView({behavior:"smooth",block:"start"});};
+  document.getElementById("mnext").onclick=function(){m.center=document.getElementById("mcenter").value.trim(); startDots();};
+  document.getElementById("mskip").onclick=function(){m.center=document.getElementById("mcenter").value.trim(); G.dot=null; G.stage="q"; G.i=0; drawGuide(); document.getElementById("guide").scrollIntoView({behavior:"smooth",block:"start"});};
 }
 function mindItems(){var m=G.mind, all=[]; BRANCHES.forEach(function(b){(m[b.k]||[]).forEach(function(t){if(all.indexOf(t)<0) all.push(t);});}); return all;}
 function mindSummary(m){
@@ -590,7 +595,7 @@ function drawMyLoops(){
 }
 function openLoop(id,toCheckin){
   var it=loadLoops().filter(function(x){return x.id===id;})[0]; if(!it) return;
-  state.data=it.data; state.mind=it.mind||null; state.ownLoop=it.ownLoop||null; state.isOwn=!!it.isOwn;
+  state.data=it.data; state.mind=it.mind||null; state.dots=it.dots||null; state.ownLoop=it.ownLoop||null; state.isOwn=!!it.isOwn;
   state.isSample=false; state.answers=it.answers||{}; state.savedId=id; state.coach=null; state.ci={}; state.view="simple";
   document.getElementById("guide").hidden=true; render();
   var t=document.getElementById(toCheckin?"checkin":"result"); if(t) t.scrollIntoView({behavior:"smooth",block:"start"});
@@ -635,7 +640,7 @@ function paintKeep(){
   if((b=document.getElementById("ksave"))) b.onclick=function(){
     ensureOwnLoop();
     var id=Date.now().toString(36);
-    var a=loadLoops(); a.push({id:id,created:new Date().toISOString(),title:d.title,data:d,mind:state.mind||null,ownLoop:state.ownLoop,isOwn:!!state.isOwn,answers:state.answers||{},checkins:[],coachNotes:[]});
+    var a=loadLoops(); a.push({id:id,created:new Date().toISOString(),title:d.title,data:d,mind:state.mind||null,dots:state.dots||null,ownLoop:state.ownLoop,isOwn:!!state.isOwn,answers:state.answers||{},checkins:[],coachNotes:[]});
     if(!storeLoops(a)){document.getElementById("kmsg").textContent="Couldn't save on this phone. Private browsing may be on.";return;}
     state.savedId=id; drawMyLoops(); render();
     var k=document.getElementById("keep"); if(k) k.scrollIntoView({behavior:"smooth",block:"start"});
@@ -669,6 +674,203 @@ function remindIcs(){
   var a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([ics],{type:"text/calendar"}));
   a.download="loop-finder-check-in.ics"; document.body.appendChild(a); a.click();
   setTimeout(function(){URL.revokeObjectURL(a.href); a.remove();},2000);
+}
+
+
+/* ---------- Connect the dots: people draw their own cause-and-effect arrows ---------- */
+var DW=360, DH=480, PW=116, PH=46, MAXPILLS=14;
+var D=null, drag=null;
+function qIndex(k){for(var i=0;i<QS.length;i++){if(QS[i].k===k) return i;} return 0;}
+function dNode(g,id){return g.nodes.filter(function(n){return n.id===id;})[0];}
+function clampX(x){return Math.max(PW/2+4,Math.min(DW-PW/2-4,x));}
+function clampY(y){return Math.max(PH/2+4,Math.min(DH-PH/2-4,y));}
+function startDots(){
+  var items=mindItems().slice(0,12), n=items.length;
+  if(!G.dots){
+    G.dots={nodes:items.map(function(t,i){var a=-Math.PI/2+2*Math.PI*i/Math.max(n,1);
+      return {id:"n"+i,label:t,x:clampX(DW/2+114*Math.cos(a)),y:clampY(DH/2+200*Math.sin(a))};}),
+      edges:[],seq:n+1};
+  }
+  D=G.dots; D.mode=D.mode||"draw"; D.sel=null; D.pending=null; D.hi=-1;
+  G.stage="dots"; drawDots();
+  document.getElementById("guide").scrollIntoView({behavior:"smooth",block:"start"});
+}
+function rectHit(n,tx,ty){
+  var dx=tx-n.x, dy=ty-n.y; if(!dx&&!dy) return {x:n.x,y:n.y};
+  var t=Math.min((PW/2+5)/Math.abs(dx||1e-9),(PH/2+5)/Math.abs(dy||1e-9));
+  return {x:n.x+dx*t,y:n.y+dy*t};
+}
+function inside(n,p,pad){pad=pad||0; return Math.abs(p.x-n.x)<=PW/2+pad&&Math.abs(p.y-n.y)<=PH/2+pad;}
+function wob(id,k){var h=0,s=id+":"+k; for(var i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))|0; return ((h%9)+9)%9-4;}
+function edgeGeom(g,e){
+  var a=dNode(g,e.from), b=dNode(g,e.to);
+  if(e.pts&&e.pts.length>2){
+    var P=e.pts, d="M"+P[0].x.toFixed(1)+" "+P[0].y.toFixed(1);
+    for(var i=1;i<P.length-1;i++){var mx=(P[i].x+P[i+1].x)/2, my=(P[i].y+P[i+1].y)/2; d+=" Q"+P[i].x.toFixed(1)+" "+P[i].y.toFixed(1)+" "+mx.toFixed(1)+" "+my.toFixed(1);}
+    var L=P[P.length-1]; d+=" L"+L.x.toFixed(1)+" "+L.y.toFixed(1);
+    var M=P[Math.floor(P.length/2)]; return {d:d,lx:M.x,ly:M.y};
+  }
+  var p0=rectHit(a,b.x,b.y), p1=rectHit(b,a.x,a.y), dx=p1.x-p0.x, dy=p1.y-p0.y, len=Math.sqrt(dx*dx+dy*dy)||1;
+  var px=-dy/len, py=dx/len, o1=16+wob(e.id,1), o2=16+wob(e.id,2);
+  var c1={x:p0.x+dx*0.33+px*o1,y:p0.y+dy*0.33+py*o1}, c2={x:p0.x+dx*0.66+px*o2,y:p0.y+dy*0.66+py*o2};
+  var lx=0.125*p0.x+0.375*c1.x+0.375*c2.x+0.125*p1.x, ly=0.125*p0.y+0.375*c1.y+0.375*c2.y+0.125*p1.y;
+  return {d:"M"+p0.x.toFixed(1)+" "+p0.y.toFixed(1)+" C"+c1.x.toFixed(1)+" "+c1.y.toFixed(1)+" "+c2.x.toFixed(1)+" "+c2.y.toFixed(1)+" "+p1.x.toFixed(1)+" "+p1.y.toFixed(1),lx:lx,ly:ly};
+}
+function findCycles(g){
+  var ids=g.nodes.map(function(n){return n.id;}), idx={}, out=[];
+  ids.forEach(function(id,i){idx[id]=i;});
+  var adj={}; g.edges.forEach(function(e){(adj[e.from]=adj[e.from]||[]).push(e.to);});
+  ids.forEach(function(s){
+    (function dfs(v,path){
+      if(out.length>=12) return;
+      (adj[v]||[]).forEach(function(w){
+        if(w===s&&path.length>=2) out.push(path.slice());
+        else if(path.indexOf(w)<0&&idx[w]>idx[s]&&path.length<5) dfs(w,path.concat([w]));
+      });
+    })(s,[s]);
+  });
+  return out.map(function(c){
+    var signs=c.map(function(id,k){var to=c[(k+1)%c.length]; var e=g.edges.filter(function(x){return x.from===id&&x.to===to;})[0]; return e?e.sign:"+";});
+    var neg=signs.filter(function(s){return s==="-";}).length;
+    return {ids:c,steps:c.map(function(id){return dNode(g,id).label;}),signs:signs,type:neg%2?"B":"R"};
+  });
+}
+function dotsSvg(g,opt){
+  opt=opt||{}; var hiIds=opt.hiIds||[], live=opt.interactive;
+  var hiEdge=function(e){var i=hiIds.indexOf(e.from); return i>=0&&hiIds[(i+1)%hiIds.length]===e.to&&hiIds.length>1;};
+  var out='<svg id="'+(live?'dsvg':'')+'" class="dsvg" viewBox="0 0 '+DW+' '+DH+'" role="img" aria-label="Your connections: '+g.edges.length+' arrows">'
+   +'<defs><marker id="da-ink'+(live?'':'s')+'" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1L10 5L0 9z" fill="var(--ink)"/></marker>'
+   +'<marker id="da-hi'+(live?'':'s')+'" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1L10 5L0 9z" fill="var(--accent)"/></marker></defs>';
+  g.edges.forEach(function(e){
+    var ge=edgeGeom(g,e), hi=hiEdge(e), sel=live&&D.sel&&D.sel.t==="edge"&&D.sel.id===e.id;
+    var col=hi?"var(--accent)":sel?"var(--b)":"var(--ink)";
+    out+='<g'+(live?' data-edge="'+e.id+'"':'')+'>';
+    if(live) out+='<path d="'+ge.d+'" fill="none" stroke="transparent" stroke-width="22"/>';
+    out+='<path d="'+ge.d+'" fill="none" stroke="'+col+'" stroke-width="'+(hi||sel?3.2:2.2)+'" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#'+(hi?'da-hi':'da-ink')+(live?'':'s')+')"/>';
+    out+='<circle cx="'+ge.lx.toFixed(1)+'" cy="'+ge.ly.toFixed(1)+'" r="11" fill="var(--card)" stroke="'+col+'" stroke-width="1.6"/>'
+      +'<text x="'+ge.lx.toFixed(1)+'" y="'+(ge.ly+5.5).toFixed(1)+'" text-anchor="middle" font-size="16" font-weight="700" font-family="Inter, system-ui, sans-serif" fill="'+col+'">'+(e.sign==="-"?"−":"+")+'</text></g>';
+  });
+  g.nodes.forEach(function(n){
+    var on=hiIds.indexOf(n.id)>=0, sel=live&&((D.sel&&D.sel.t==="node"&&D.sel.id===n.id)||D.pending===n.id);
+    var lines=wrapLabel(n.label,14).slice(0,2);
+    out+='<g'+(live?' data-node="'+n.id+'" style="cursor:grab"':'')+'>'
+      +'<rect x="'+(n.x-PW/2).toFixed(1)+'" y="'+(n.y-PH/2).toFixed(1)+'" width="'+PW+'" height="'+PH+'" rx="22" fill="'+(on?'var(--accent-soft)':sel?'var(--b-soft)':'var(--card)')+'" stroke="'+(on?'var(--accent)':sel?'var(--b)':'var(--ink)')+'" stroke-width="'+(on||sel?2.4:1.6)+'"/>';
+    lines.forEach(function(l,i){out+='<text x="'+n.x.toFixed(1)+'" y="'+(n.y+6-(lines.length-1)*8+i*16).toFixed(1)+'" text-anchor="middle" font-size="17" font-weight="700" font-family="Gaegu, Comic Sans MS, cursive" fill="var(--ink)" pointer-events="none">'+esc(cut(l,16))+'</text>';});
+    out+='</g>';
+  });
+  if(live) out+='<path id="dlive" d="" fill="none" stroke="var(--b)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>';
+  return out+'</svg>';
+}
+function dotsCard(){
+  if(!state.isOwn||!state.dots||!state.dots.edges||!state.dots.edges.length) return '';
+  return '<div class="card"><span class="eyebrow">Your connections</span><div class="dotswrap">'+dotsSvg(state.dots,{hiIds:state.dots.hiIds||[]})+'</div><p class="first">Drawn by you. Your loop is in green.</p></div>';
+}
+function drawDots(){
+  var g=document.getElementById("guide");
+  g.innerHTML='<span class="eyebrow">Step 2 of 3 · Connect the dots</span>'
+   +'<p class="gq">What causes what? Draw arrows between your ideas.</p>'
+   +'<p class="first" id="dhint"></p>'
+   +'<div class="seg" role="group" aria-label="What your finger does"><button id="dm-draw">Draw arrows</button><button id="dm-move">Move things</button></div>'
+   +'<div class="dotswrap" id="dwrap"></div>'
+   +'<div class="dtools" id="dtools"></div>'
+   +'<div class="madd"><input class="gin" id="dadd" maxlength="30" placeholder="Add something else" aria-label="Add something to the map" autocomplete="off"><button class="btn" id="daddb">Add</button></div>'
+   +'<div id="dloops" class="dtools"></div>'
+   +'<div class="row"><button class="btn" id="dback">Back to mind map</button><button class="btn" id="dquick">Quick questions instead</button></div>';
+  document.getElementById("dm-draw").onclick=function(){D.mode="draw"; D.sel=null; D.pending=null; paintDots();};
+  document.getElementById("dm-move").onclick=function(){D.mode="move"; D.sel=null; D.pending=null; paintDots();};
+  var addIt=function(){var i=document.getElementById("dadd"), v=i.value.trim(); if(!v) return;
+    if(D.nodes.length>=MAXPILLS){document.getElementById("dhint").textContent="That's plenty. Remove something first to add more."; return;}
+    D.nodes.push({id:"n"+(D.seq++),label:v,x:DW/2+wob(v,1)*6,y:DH/2+wob(v,2)*6}); i.value=""; paintDots();};
+  document.getElementById("daddb").onclick=addIt;
+  document.getElementById("dadd").onkeydown=function(e){if(e.key==="Enter"){e.preventDefault(); addIt();}};
+  document.getElementById("dback").onclick=function(){G.stage="mind"; drawMind();};
+  document.getElementById("dquick").onclick=function(){G.dot=null; G.stage="q"; G.i=0; drawGuide(); document.getElementById("guide").scrollIntoView({behavior:"smooth",block:"start"});};
+  paintDots();
+}
+function paintDots(){
+  var cyc=findCycles(D); if(D.hi>=cyc.length) D.hi=-1;
+  document.getElementById("dwrap").innerHTML=dotsSvg(D,{interactive:true,hiIds:D.hi>=0?cyc[D.hi].ids:[]});
+  document.getElementById("dm-draw").setAttribute("aria-pressed",D.mode==="draw");
+  document.getElementById("dm-move").setAttribute("aria-pressed",D.mode==="move");
+  document.getElementById("dhint").textContent=!D.nodes.length?"Add a few things below first, like “Stress”, “Spending”, “Debt”."
+    :D.mode==="draw"?(D.pending?"Now tap what it causes.":"Drag your finger from one thing to what it causes. Or tap one, then the other.")
+    :"Drag things around to tidy your map. Tap one to remove it.";
+  var t="", s=D.sel;
+  if(s&&s.t==="edge"){var e=D.edges.filter(function(x){return x.id===s.id;})[0];
+    if(e){t='<p class="first"><b>'+esc(dNode(D,e.from).label)+'</b> → <b>'+esc(dNode(D,e.to).label)+'</b>: when the first goes up, the second…</p><div class="chips">'
+      +'<button class="chip" data-sign="+" aria-pressed="'+(e.sign==="+")+'">+ goes up too</button><button class="chip" data-sign="-" aria-pressed="'+(e.sign==="-")+'">− goes down</button><button class="chip" id="drem">Remove arrow</button></div>';}}
+  else if(s&&s.t==="node"){var n=dNode(D,s.id); if(n) t='<div class="chips"><button class="chip" id="dremn">Remove “'+esc(cut(n.label,20))+'”</button></div>';}
+  document.getElementById("dtools").innerHTML=t;
+  Array.prototype.forEach.call(document.querySelectorAll("[data-sign]"),function(b){b.onclick=function(){var e=D.edges.filter(function(x){return x.id===D.sel.id;})[0]; if(e) e.sign=b.dataset.sign; paintDots();};});
+  var rb=document.getElementById("drem"); if(rb) rb.onclick=function(){D.edges=D.edges.filter(function(x){return x.id!==D.sel.id;}); D.sel=null; paintDots();};
+  var rn=document.getElementById("dremn"); if(rn) rn.onclick=function(){var id=D.sel.id; D.nodes=D.nodes.filter(function(x){return x.id!==id;}); D.edges=D.edges.filter(function(x){return x.from!==id&&x.to!==id;}); D.sel=null; paintDots();};
+  var L;
+  if(!cyc.length){
+    L='<span class="eyebrow">Loops you found</span><p class="first">None yet. Keep drawing: when your arrows come back round to where they started, you’ve found a loop.</p>';
+  }else{
+    L='<span class="eyebrow">Loops you found: '+cyc.length+'</span>'+cyc.map(function(c,i){
+      return '<button class="optbtn" data-loop="'+i+'" aria-pressed="'+(D.hi===i)+'">'+esc(c.steps.join(" → "))+' → back<small>'+(c.type==="R"?"Snowballs: it grows each time round":"Holds you steady: it pushes back")+'</small></button>';
+    }).join("")
+    +(D.hi>=0?'<div class="row"><button class="btn primary" id="duse">Use this loop</button></div>':'<p class="first">Tap a loop to see it on your map.</p>');
+    if(cyc.length===1&&D.hi<0) L='<p class="ownbar">You found a loop!</p>'+L;
+  }
+  document.getElementById("dloops").innerHTML=L;
+  Array.prototype.forEach.call(document.querySelectorAll("[data-loop]"),function(b){b.onclick=function(){D.hi=+b.dataset.loop; paintDots();};});
+  var u=document.getElementById("duse"); if(u) u.onclick=function(){
+    var c=cyc[D.hi];
+    G.dot={steps:c.steps.map(function(x){return cut(x,40);}),signs:c.signs,type:c.type};
+    G.dotsGraph=JSON.parse(JSON.stringify({nodes:D.nodes,edges:D.edges,hiIds:c.ids}));
+    G.stage="q"; G.i=qIndex("pat"); drawGuide(); document.getElementById("guide").scrollIntoView({behavior:"smooth",block:"start"});
+  };
+  wireDots();
+}
+function svgPoint(svg,e){var pt=svg.createSVGPoint(); pt.x=e.clientX; pt.y=e.clientY; var m=svg.getScreenCTM(); if(!m) return {x:0,y:0}; var q=pt.matrixTransform(m.inverse()); return {x:q.x,y:q.y};}
+function addEdge(from,to,pts){
+  if(from===to) return;
+  var e=D.edges.filter(function(x){return x.from===from&&x.to===to;})[0];
+  if(e){e.pts=pts;} else {e={id:"e"+(D.seq++),from:from,to:to,sign:"+",pts:pts}; D.edges.push(e);}
+  D.sel={t:"edge",id:e.id};
+}
+function wireDots(){
+  var svg=document.getElementById("dsvg"); if(!svg) return;
+  svg.onpointerdown=function(ev){
+    var p=svgPoint(svg,ev), nodeEl=ev.target.closest("[data-node]"), edgeEl=ev.target.closest("[data-edge]");
+    if(nodeEl){
+      var n=dNode(D,nodeEl.getAttribute("data-node"));
+      drag=D.mode==="move"?{t:"move",id:n.id,dx:p.x-n.x,dy:p.y-n.y,moved:false,sx:p.x,sy:p.y}:{t:"draw",from:n.id,pts:[p],moved:false,sx:p.x,sy:p.y};
+      try{svg.setPointerCapture(ev.pointerId);}catch(e){}
+      ev.preventDefault();
+    }else if(edgeEl){D.sel={t:"edge",id:edgeEl.getAttribute("data-edge")}; D.pending=null; paintDots();}
+    else if(D.sel||D.pending){D.sel=null; D.pending=null; paintDots();}
+  };
+  svg.onpointermove=function(ev){
+    if(!drag) return; var p=svgPoint(svg,ev);
+    if(Math.abs(p.x-drag.sx)+Math.abs(p.y-drag.sy)>6) drag.moved=true;
+    if(drag.t==="move"){
+      var n=dNode(D,drag.id); n.x=clampX(p.x-drag.dx); n.y=clampY(p.y-drag.dy);
+      D.edges.forEach(function(e){if(e.from===n.id||e.to===n.id) e.pts=null;});
+      if(drag.moved){var html=dotsSvg(D,{interactive:true,hiIds:[]}); svg.innerHTML=html.slice(html.indexOf(">")+1,html.lastIndexOf("</svg>"));}
+    }else{
+      var last=drag.pts[drag.pts.length-1]; if(Math.abs(p.x-last.x)+Math.abs(p.y-last.y)>4) drag.pts.push(p);
+      var lv=document.getElementById("dlive"); if(lv) lv.setAttribute("d","M"+drag.pts.map(function(q){return q.x.toFixed(1)+" "+q.y.toFixed(1);}).join(" L"));
+    }
+  };
+  svg.onpointerup=svg.onpointercancel=function(ev){
+    if(!drag) return; var d0=drag; drag=null; var p=svgPoint(svg,ev);
+    if(d0.t==="move"){ if(!d0.moved){D.sel={t:"node",id:d0.id};} paintDots(); return; }
+    var target=D.nodes.filter(function(n){return inside(n,p,6);})[0];
+    if(d0.moved){
+      if(target&&target.id!==d0.from){
+        var a=dNode(D,d0.from), pts=d0.pts.filter(function(q){return !inside(a,q,3)&&!inside(target,q,3);});
+        if(pts.length>2){pts.unshift(rectHit(a,pts[0].x,pts[0].y)); pts.push(rectHit(target,pts[pts.length-1].x,pts[pts.length-1].y)); var keep=[pts[0]]; pts.forEach(function(q){var l=keep[keep.length-1]; if(Math.abs(q.x-l.x)+Math.abs(q.y-l.y)>8) keep.push(q);}); keep.push(pts[pts.length-1]); pts=keep;} else pts=null;
+        addEdge(d0.from,target.id,pts); D.pending=null;
+      }
+    }else{
+      if(D.pending&&D.pending!==d0.from){addEdge(D.pending,d0.from,null); D.pending=null;}
+      else D.pending=D.pending===d0.from?null:d0.from;
+    }
+    paintDots();
+  };
 }
 
 document.getElementById("stop").onclick=function(){if(state.ctl)state.ctl.abort();};
