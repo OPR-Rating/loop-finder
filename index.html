@@ -72,6 +72,22 @@ ul.plain{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
 .layer .later{font-size:11.5px;font-weight:600;color:var(--muted)}
 .layer p{font-size:14px;color:var(--muted)}
 .foot{font-size:12.5px;color:var(--muted)}
+.consent{display:flex;gap:10px;align-items:flex-start;font-size:14px;line-height:1.45;cursor:pointer}
+.consent input{width:20px;height:20px;margin-top:1px;flex:none;accent-color:var(--accent)}
+.legal{font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:6px}
+.legal b{color:var(--ink)}
+.prog{display:flex;gap:4px}
+.prog span{flex:1;height:5px;border-radius:3px;background:var(--line)}
+.prog span.on{background:var(--accent)}
+.gq{font-family:var(--display);font-size:22px;line-height:1.25}
+.gin{font:inherit;width:100%;border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--bg);color:var(--ink)}
+.gin:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.opts{display:flex;flex-direction:column;gap:8px}
+.optbtn{font:inherit;text-align:left;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:12px;padding:11px 14px;cursor:pointer}
+.optbtn[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft);font-weight:600}
+.optbtn small{display:block;color:var(--muted);font-weight:400;font-size:13px}
+.optbtn:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.ownbar{font-size:13px;color:var(--accent);background:var(--accent-soft);border-radius:10px;padding:8px 12px}
 @media (prefers-reduced-motion:no-preference){.spin{animation:sp 1.2s linear infinite;display:inline-block}@keyframes sp{to{transform:rotate(360deg)}}}
 </style>
 <style>body{margin:0}</style>
@@ -83,10 +99,17 @@ ul.plain{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
   <header style="display:flex;flex-direction:column;gap:8px">
     <span class="eyebrow">Systems thinking prototype</span>
     <h1>Loop Finder</h1>
-    <p class="lede">Tell it what you're struggling with. It finds the circle you're stuck in, shows it simply or in detail, and points to where a small push changes the most.</p>
+    <p class="lede">Tell it what you're struggling with. Find the circle you're stuck in, see it simply or in detail, and spot where a small push changes the most. Let the app map it for you, or think it through yourself, step by step.</p>
   </header>
 
+  <section class="card" aria-labelledby="beforeh">
+    <span class="eyebrow" id="beforeh">Before you start</span>
+    <label class="consent" for="agree"><input type="checkbox" id="agree"><span>I understand that Loop Finder is a thinking tool, <b>not</b> therapy, counselling or professional advice, and that the people behind it are not psychologists, doctors or licensed advisers.</span></label>
+  </section>
+
   <section class="card" aria-labelledby="askh">
+    <div class="seg" role="group" aria-label="How do you want to work?"><button id="m-ai" aria-pressed="true">Map it for me</button><button id="m-self" aria-pressed="false">Think it through myself</button></div>
+    <p class="first" id="modeline">The app reads what you write and draws your loop in about a minute.</p>
     <label class="eyebrow" id="askh" for="ask">What are you struggling with?</label>
     <p class="first" style="margin-top:-4px">Anything at all: money, school, work, family, health, sport, confidence. Write it the way you'd tell a friend.</p>
     <textarea id="ask" placeholder="Type what's on your mind…"></textarea>
@@ -99,19 +122,27 @@ ul.plain{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
     </div>
   </section>
 
+  <section class="card" id="guide" hidden aria-live="polite"></section>
+
   <div id="result"></div>
 
   <section class="card">
     <span class="eyebrow">Where the answers come from</span>
     <h2>Four sources, one map</h2>
     <div class="layers">
-      <div class="layer"><span class="now">Coming first</span><h3>AI, with a systems recipe</h3><p>The app sends your words plus a fixed recipe: find the loops, name the pattern, rank the leverage points. The AI returns a map the app draws.</p></div>
+      <div class="layer"><span class="now">Live now</span><h3>AI, with a systems recipe</h3><p>The app sends your words plus a fixed recipe: find the loops, name the pattern, rank the leverage points. The AI returns a map the app draws.</p></div>
       <div class="layer"><span class="later">Next</span><h3>Trusted content</h3><p>Guides, videos and checklists from qualified teachers, coaches and advisers. The map links to the one that fits your loop.</p></div>
       <div class="layer"><span class="later">Next</span><h3>Live facts</h3><p>A web search for things that change: house prices, deposit rules, exam dates. Shown with their sources, never guessed.</p></div>
       <div class="layer"><span class="later">Later</span><h3>Your own results</h3><p>Check-ins, marks, savings or match scores. The app sees whether the loop is breaking and adjusts the next step.</p></div>
     </div>
   </section>
-  <p class="foot">Prototype. Maps are general guidance for thinking things through, not financial, medical or professional advice.</p>
+  <section class="legal" aria-labelledby="legalh">
+    <span class="eyebrow" id="legalh">Important</span>
+    <p><b>Loop Finder is a self-reflection tool.</b> It is not therapy, counselling, or medical, psychological, financial, legal or career advice, and the people behind it are not psychologists, doctors or licensed advisers. Maps are general ideas to help you think. Decide for yourself what is right for you, and speak to a qualified professional before making important decisions.</p>
+    <p><b>If you are in distress or danger,</b> contact your local emergency services or a crisis helpline straight away, or talk to someone you trust.</p>
+    <p><b>Your words:</b> in "Map it for me", what you type is sent to an AI service to draw your map; Loop Finder does not keep it. Don't include names, ID numbers or other private details. In "Think it through myself", nothing leaves your phone.</p>
+    <p>Prototype, offered as is. Use at your own discretion.</p>
+  </section>
 </div>
 
 <script>
@@ -145,7 +176,7 @@ var SAMPLE={
  facts_to_check:["Your exam board's grade boundaries and past papers, from your school"],
  care_note:""
 };
-var state={data:SAMPLE,isSample:true,view:"simple",ctl:null};
+var state={data:SAMPLE,isSample:true,isOwn:false,view:"simple",ctl:null,mode:"ai"};
 function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
 
 function wrapLabel(t,max){var w=String(t).split(/\s+/),lines=[],cur="";w.forEach(function(x){if((cur+" "+x).trim().length>max&&cur){lines.push(cur);cur=x;}else cur=(cur+" "+x).trim();});if(cur)lines.push(cur);return lines.slice(0,3);}
@@ -192,7 +223,7 @@ function detailedView(d){
    +'</div><p class="first"><b>+</b> means both move the same way (more leads to more). <b>−</b> means they move opposite ways (more leads to less).</p></div>'
    +(d.pattern&&d.pattern.name?'<div class="card"><span class="eyebrow">The pattern behind it</span><h3>'+esc(d.pattern.name)+'</h3><p>'+esc(d.pattern.plain)+'</p></div>':'')
    +'<div class="card"><span class="eyebrow">Where to push, best first</span><ol class="lev">'
-   +(d.leverage||[]).map(function(l){return '<li><div class="row"><b>'+esc(l.move)+'</b><span class="tag '+esc(l.strength)+'">'+esc(l.strength)+' leverage</span></div><span class="first">At: '+esc(l.where)+'</span><span class="first"><b>This week:</b> '+esc(l.first_step)+'</span></li>';}).join('')+'</ol></div>'
+   +(d.leverage||[]).map(function(l){return '<li><div class="row"><b>'+esc(l.move)+'</b>'+(l.strength?'<span class="tag '+esc(l.strength)+'">'+esc(l.strength)+' leverage</span>':'')+'</div><span class="first">At: '+esc(l.where)+'</span><span class="first"><b>This week:</b> '+esc(l.first_step)+'</span></li>';}).join('')+'</ol></div>'
    +'<div class="card"><span class="eyebrow">Questions to sharpen your map</span><ul class="plain">'+(d.questions||[]).map(function(q){return '<li>'+esc(q)+'</li>';}).join('')+'</ul>'
    +((d.facts_to_check||[]).length?'<span class="eyebrow" style="margin-top:6px">Facts to check where you live</span><ul class="plain">'+d.facts_to_check.map(function(q){return '<li>'+esc(q)+'</li>';}).join('')+'</ul>':'')+'</div>';
 }
@@ -200,7 +231,8 @@ function render(){
   var d=state.data, el=document.getElementById("result");
   if(!d){el.innerHTML="";return;}
   el.innerHTML='<div class="wrap" style="max-width:none">'
-   +(state.isSample?'<div class="examplebar">Example map, made in advance. Live maps from your own words are coming soon.</div>':'')
+   +(state.isSample?'<div class="examplebar">Example map, made in advance. Type your own struggle above to make yours.</div>':'')
+   +(state.isOwn?'<div class="ownbar">Your own map, built from your answers. Nothing was sent anywhere.</div>':'')
    +'<div class="row" style="justify-content:space-between"><h2>'+esc(d.title)+'</h2>'
    +'<div class="seg" role="group" aria-label="How much detail"><button id="v-simple" aria-pressed="'+(state.view==="simple")+'">Simple</button><button id="v-detail" aria-pressed="'+(state.view==="detail")+'">Detailed</button></div></div>'
    +(d.care_note?'<div class="care">'+esc(d.care_note)+'</div>':'')
@@ -221,6 +253,8 @@ function setBusy(b,msg,err){
 }
 document.getElementById("go").onclick=async function(){
   var text=document.getElementById("ask").value.trim();
+  if(!agreedOk()) return;
+  if(state.mode==="self"){startGuide(text);return;}
   if(!text){document.getElementById("ask").focus();setBusy(false,"Type what you're struggling with first.",true);return;}
   if(!LIVE){setBusy(false,"Live maps are coming soon. For now, explore the example map below.",true);document.getElementById("result").scrollIntoView({behavior:"smooth",block:"start"});return;}
   state.ctl=new AbortController();
@@ -229,13 +263,120 @@ document.getElementById("go").onclick=async function(){
     var r=await fetch(LF_API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text:text}),signal:state.ctl.signal});
     var d=null; try{d=await r.json();}catch(e){}
     if(!r.ok||!valid(d)){var code=(d&&d.error)||"garbled"; setBusy(false,MSG[code]||"Something went wrong. Press Find my loop to try again.",true); return;}
-    state.data=d; state.isSample=false; state.view="simple"; setBusy(false,"");
+    state.data=d; state.isSample=false; state.isOwn=false; state.view="simple"; setBusy(false,"");
     render(); document.getElementById("result").scrollIntoView({behavior:"smooth",block:"start"});
   }catch(e){
     if(e&&e.name==="AbortError"){setBusy(false,"Stopped.");return;}
     setBusy(false,"Couldn't reach Loop Finder. Check your internet and try again.",true);
   }
 };
+
+/* ---------- Consent ---------- */
+var agreeBox=document.getElementById("agree");
+try{agreeBox.checked=localStorage.getItem("lf_agree")==="1";}catch(e){}
+agreeBox.onchange=function(){try{localStorage.setItem("lf_agree",agreeBox.checked?"1":"0");}catch(e){} if(agreeBox.checked) setBusy(false,"");};
+function agreedOk(){
+  if(agreeBox.checked) return true;
+  setBusy(false,'Please tick "I understand" at the top first.',true);
+  agreeBox.closest("section").scrollIntoView({behavior:"smooth",block:"center"}); agreeBox.focus();
+  return false;
+}
+
+/* ---------- Mode switch ---------- */
+function setMode(m){
+  state.mode=m;
+  document.getElementById("m-ai").setAttribute("aria-pressed",m==="ai");
+  document.getElementById("m-self").setAttribute("aria-pressed",m==="self");
+  document.getElementById("go").textContent=m==="ai"?"Find my loop":"Start thinking it through";
+  document.getElementById("modeline").textContent=m==="ai"
+    ?"The app reads what you write and draws your loop in about a minute."
+    :"Answer a few short questions, like a coach would ask. You build the loop yourself, and nothing leaves your phone.";
+  setBusy(false,"");
+  if(m==="ai") document.getElementById("guide").hidden=true;
+}
+document.getElementById("m-ai").onclick=function(){setMode("ai");};
+document.getElementById("m-self").onclick=function(){setMode("self");};
+
+/* ---------- Think it through myself: a short coaching conversation ---------- */
+var PATTERNS=[
+ {name:"Fixes that Fail",say:"My quick fix helps now but makes things worse later",plain:"The quick fix eases things today but feeds the problem tomorrow. Look for a slower fix that doesn't bite back."},
+ {name:"Shifting the Burden",say:"I lean on something or someone instead of fixing the real cause",plain:"The crutch works, so the real cause never gets fixed, and you need the crutch more and more."},
+ {name:"Limits to Growth",say:"Things went well for a while, then hit a ceiling",plain:"Pushing harder won't help. Find what is holding the ceiling in place and work on that."},
+ {name:"Eroding Goals",say:"I keep lowering my goals or expectations",plain:"Each time you lower the bar, the gap closes on paper but not in life. Hold the goal and change the plan."},
+ {name:"Escalation",say:"It's a back-and-forth battle with someone",plain:"Each side reacts to the other and it keeps rising. One side stepping back first breaks the spiral."},
+ {name:"None clear",say:"None of these really fits",plain:"Not every loop has a famous name. Your map still shows where to push."}
+];
+var G={i:0,ans:{},struggle:""};
+function q(k){return esc(G.ans[k]||"");}
+var QS=[
+ {k:"a",type:"text",max:40,ask:function(){return "What keeps happening that you want to change?";},hint:"A few words, like “Money runs out early” or “I feel behind at school”."},
+ {k:"b",type:"text",max:40,ask:function(){return "When “"+q("a")+"” happens, what do you usually do or feel next?";},hint:"Be honest, nobody else sees this. E.g. “Use my credit card” or “Study late at night”."},
+ {k:"c",type:"text",max:40,ask:function(){return "What does “"+q("b")+"” lead to?";},hint:"E.g. “A bigger card bill” or “Less sleep”."},
+ {k:"d",type:"text",max:40,optional:true,ask:function(){return "And what does “"+q("c")+"” lead to?";},hint:"Leave it empty if it leads straight back to “{a}”."},
+ {k:"loop",type:"choice",ask:function(){return "Does that bring you back to “"+q("a")+"”? When it does, is it…";},
+  options:function(){return [["R","Worse than before","It snowballs: each time round, it grows."],["B","About the same","I'm stuck at a level and can't break through."],["?","I'm not sure","That's fine. Go with what feels closest."]];}},
+ {k:"pat",type:"choice",ask:function(){return "Which of these sounds most like your situation?";},
+  options:function(){return PATTERNS.map(function(p,i){return [String(i),p.say,""];});}},
+ {k:"lev",type:"choice",ask:function(){return "Looking at your loop, which step could you change most easily?";},
+  options:function(){return stepsNow().map(function(st){return [st,st,""];});}},
+ {k:"act",type:"text",max:120,ask:function(){return "What is one small thing you could do this week to change “"+q("lev")+"”?";},hint:"Small and specific: what, when and where. E.g. “Move R200 to savings on payday, Friday”."},
+ {k:"conf",type:"choice",ask:function(){return "How sure are you that you'll actually do it?";},
+  options:function(){return [["10","Very sure (9–10)",""],["8","Fairly sure (7–8)",""],["6","Not very sure (5–6)",""],["3","Unlikely (1–4)",""]];}},
+ {k:"name",type:"text",max:30,optional:true,ask:function(){return "Last one: give your loop a name.";},hint:"Optional. Something you'll remember, like “The payday trap”."}
+];
+function stepsNow(){return ["a","b","c","d"].map(function(k){return (G.ans[k]||"").trim();}).filter(Boolean);}
+function startGuide(text){
+  G={i:0,ans:{},struggle:text}; drawGuide();
+  var g=document.getElementById("guide"); g.hidden=false; g.scrollIntoView({behavior:"smooth",block:"start"});
+}
+function drawGuide(){
+  var Q=QS[G.i], g=document.getElementById("guide"), val=G.ans[Q.k]||"";
+  var bars=QS.map(function(_,i){return '<span class="'+(i<=G.i?'on':'')+'"></span>';}).join("");
+  var body;
+  if(Q.type==="text"){
+    body='<input class="gin" id="gin" maxlength="'+Q.max+'" value="'+esc(val)+'" aria-label="Your answer" autocomplete="off">';
+  }else{
+    body='<div class="opts">'+Q.options().map(function(o){return '<button class="optbtn" data-v="'+esc(o[0])+'" aria-pressed="'+(val===o[0])+'">'+esc(o[1])+(o[2]?'<small>'+esc(o[2])+'</small>':'')+'</button>';}).join("")+'</div>';
+  }
+  var hint=Q.hint?'<p class="first">'+esc(Q.hint).replace("{a}",q("a"))+'</p>':'';
+  g.innerHTML='<div class="prog" aria-hidden="true">'+bars+'</div><span class="eyebrow">Question '+(G.i+1)+' of '+QS.length+'</span>'
+   +'<p class="gq">'+Q.ask()+'</p>'+hint+body
+   +'<div class="row"><button class="btn" id="gback"'+(G.i===0?' hidden':'')+'>Back</button><button class="btn primary" id="gnext">'+(G.i===QS.length-1?'See my loop':'Next')+'</button><span class="status err" id="gerr" aria-live="polite"></span></div>';
+  var inp=document.getElementById("gin");
+  if(inp){inp.focus(); inp.onkeydown=function(e){if(e.key==="Enter"){e.preventDefault();next();}};}
+  Array.prototype.forEach.call(g.querySelectorAll(".optbtn"),function(b){b.onclick=function(){G.ans[Q.k]=b.dataset.v; next();};});
+  document.getElementById("gnext").onclick=next;
+  document.getElementById("gback").onclick=function(){saveText(); if(G.i>0){G.i--; drawGuide();}};
+}
+function saveText(){var inp=document.getElementById("gin"); if(inp) G.ans[QS[G.i].k]=inp.value.trim();}
+function next(){
+  var Q=QS[G.i]; saveText();
+  if(!Q.optional && !(G.ans[Q.k]||"").trim()){document.getElementById("gerr").textContent=Q.type==="text"?"Write a few words first.":"Pick the one closest to you.";return;}
+  if(G.i<QS.length-1){G.i++; drawGuide(); return;}
+  finishGuide();
+}
+function finishGuide(){
+  var A=G.ans, steps=stepsNow(), type=A.loop==="B"?"B":"R";
+  var signs=steps.map(function(_,i){return (type==="B"&&i===steps.length-1)?"-":"+";});
+  var pat=PATTERNS[+A.pat]||PATTERNS[5], conf=+A.conf||0, name=(A.name||"").trim()||"My loop";
+  var qs=[];
+  if(conf<7) qs.push("You weren't very sure you'd do it. Make the step smaller, until you'd say 7 out of 10 or more.");
+  qs.push("What would you notice first if this loop started to break?");
+  qs.push("Who could help you with your one small step, or keep you to it?");
+  qs.push("When will you check in with yourself? Put a reminder in your phone for a week from today.");
+  state.data={
+    title:name,
+    one_liner:steps.join(" → ")+" → and back to "+steps[0]+".",
+    loops:[{name:name,type:type,steps:steps,signs:signs,story:type==="R"?"Each time round, this loop makes “"+steps[0]+"” a little worse. That is why trying harder alone hasn't fixed it.":"This loop keeps you stuck at the same level: every push gets pushed back."}],
+    pattern:{name:pat.name,plain:pat.plain},
+    leverage:[{where:A.lev,move:"Change what happens at “"+A.lev+"”.",first_step:A.act,strength:""}],
+    questions:qs, facts_to_check:[], care_note:""
+  };
+  state.isSample=false; state.isOwn=true; state.view="simple";
+  document.getElementById("guide").hidden=true; render();
+  document.getElementById("result").scrollIntoView({behavior:"smooth",block:"start"});
+}
+
 document.getElementById("stop").onclick=function(){if(state.ctl)state.ctl.abort();};
 document.getElementById("examples").innerHTML=EXAMPLES.map(function(x,i){var short=TOPICS[i][0];return '<button class="chip" data-ex="'+i+'">'+short+'</button>';}).join("");
 document.getElementById("examples").onclick=function(e){var b=e.target.closest("[data-ex]");if(!b)return;var t=document.getElementById("ask");t.value=EXAMPLES[+b.dataset.ex];t.focus();};
