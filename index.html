@@ -109,6 +109,7 @@ ul.plain{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
 .dotswrap{border:1px dashed var(--line);border-radius:14px;background:var(--bg);overflow:hidden}
 .dsvg{width:100%;max-width:520px;height:auto;display:block;margin:0 auto;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 .dtools{display:flex;flex-direction:column;gap:8px}
+.zoomrow .btn{padding:8px 14px;min-width:44px}
 .ownbar{font-size:13px;color:var(--accent);background:var(--accent-soft);border-radius:10px;padding:8px 12px}
 @media (prefers-reduced-motion:no-preference){.spin{animation:sp 1.2s linear infinite;display:inline-block}@keyframes sp{to{transform:rotate(360deg)}}}
 </style>
@@ -691,7 +692,7 @@ function startDots(){
       return {id:"n"+i,label:t,x:clampX(DW/2+114*Math.cos(a)),y:clampY(DH/2+200*Math.sin(a))};}),
       edges:[],seq:n+1};
   }
-  D=G.dots; D.mode=D.mode||"draw"; D.sel=null; D.pending=null; D.hi=-1;
+  D=G.dots; D.view=D.view||{x:0,y:0,w:DW,h:DH}; D.mode=D.mode||"draw"; D.sel=null; D.pending=null; D.hi=-1;
   G.stage="dots"; drawDots();
   document.getElementById("guide").scrollIntoView({behavior:"smooth",block:"start"});
 }
@@ -738,7 +739,7 @@ function findCycles(g){
 function dotsSvg(g,opt){
   opt=opt||{}; var hiIds=opt.hiIds||[], live=opt.interactive;
   var hiEdge=function(e){var i=hiIds.indexOf(e.from); return i>=0&&hiIds[(i+1)%hiIds.length]===e.to&&hiIds.length>1;};
-  var out='<svg id="'+(live?'dsvg':'')+'" class="dsvg" viewBox="0 0 '+DW+' '+DH+'" role="img" aria-label="Your connections: '+g.edges.length+' arrows">'
+  var out='<svg id="'+(live?'dsvg':'')+'" class="dsvg" viewBox="'+vbStr(live?D.view:fitView(g))+'" role="img" aria-label="Your connections: '+g.edges.length+' arrows">'
    +'<defs><marker id="da-ink'+(live?'':'s')+'" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1L10 5L0 9z" fill="var(--ink)"/></marker>'
    +'<marker id="da-hi'+(live?'':'s')+'" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1L10 5L0 9z" fill="var(--accent)"/></marker></defs>';
   g.edges.forEach(function(e){
@@ -771,16 +772,21 @@ function drawDots(){
    +'<p class="gq">What causes what? Draw arrows between your ideas.</p>'
    +'<p class="first" id="dhint"></p>'
    +'<div class="seg" role="group" aria-label="What your finger does"><button id="dm-draw">Draw arrows</button><button id="dm-move">Move things</button></div>'
+   +'<div class="row zoomrow"><button class="btn" id="dz-out" aria-label="Zoom out">\u2212</button><button class="btn" id="dz-in" aria-label="Zoom in">+</button><button class="btn" id="dz-fit">Fit all</button></div>'
    +'<div class="dotswrap" id="dwrap"></div>'
+   +'<p class="first">Pinch to zoom. Drag an empty space to move around.</p>'
    +'<div class="dtools" id="dtools"></div>'
    +'<div class="madd"><input class="gin" id="dadd" maxlength="30" placeholder="Add something else" aria-label="Add something to the map" autocomplete="off"><button class="btn" id="daddb">Add</button></div>'
    +'<div id="dloops" class="dtools"></div>'
    +'<div class="row"><button class="btn" id="dback">Back to mind map</button><button class="btn" id="dquick">Quick questions instead</button></div>';
   document.getElementById("dm-draw").onclick=function(){D.mode="draw"; D.sel=null; D.pending=null; paintDots();};
+  document.getElementById("dz-in").onclick=function(){zoomBy(1/1.25); viewApply(document.getElementById("dsvg"));};
+  document.getElementById("dz-out").onclick=function(){zoomBy(1.25); viewApply(document.getElementById("dsvg"));};
+  document.getElementById("dz-fit").onclick=function(){D.view=fitView(D); viewApply(document.getElementById("dsvg"));};
   document.getElementById("dm-move").onclick=function(){D.mode="move"; D.sel=null; D.pending=null; paintDots();};
   var addIt=function(){var i=document.getElementById("dadd"), v=i.value.trim(); if(!v) return;
     if(D.nodes.length>=MAXPILLS){document.getElementById("dhint").textContent="That's plenty. Remove something first to add more."; return;}
-    D.nodes.push({id:"n"+(D.seq++),label:v,x:DW/2+wob(v,1)*6,y:DH/2+wob(v,2)*6}); i.value=""; paintDots();};
+    D.nodes.push({id:"n"+(D.seq++),label:v,x:D.view.x+D.view.w/2+wob(v,1)*6,y:D.view.y+D.view.h/2+wob(v,2)*6}); i.value=""; paintDots();};
   document.getElementById("daddb").onclick=addIt;
   document.getElementById("dadd").onkeydown=function(e){if(e.key==="Enter"){e.preventDefault(); addIt();}};
   document.getElementById("dback").onclick=function(){G.stage="mind"; drawMind();};
@@ -831,23 +837,68 @@ function addEdge(from,to,pts){
   if(e){e.pts=pts;} else {e={id:"e"+(D.seq++),from:from,to:to,sign:"+",pts:pts}; D.edges.push(e);}
   D.sel={t:"edge",id:e.id};
 }
+function vbStr(v){return v.x.toFixed(1)+" "+v.y.toFixed(1)+" "+v.w.toFixed(1)+" "+v.h.toFixed(1);}
+function fitView(g){
+  if(!g.nodes.length) return {x:0,y:0,w:DW,h:DH};
+  var x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;
+  g.nodes.forEach(function(n){x0=Math.min(x0,n.x-PW/2);y0=Math.min(y0,n.y-PH/2);x1=Math.max(x1,n.x+PW/2);y1=Math.max(y1,n.y+PH/2);});
+  var pad=28, w=x1-x0+2*pad, h=y1-y0+2*pad;
+  if(w/h<DW/DH) w=h*DW/DH; w=Math.max(w,240); h=w*DH/DW;
+  var cx=(x0+x1)/2, cy=(y0+y1)/2; return {x:cx-w/2,y:cy-h/2,w:w,h:h};
+}
+function viewApply(svg){if(svg) svg.setAttribute("viewBox",vbStr(D.view));}
+function zoomBy(f,cx,cy){
+  var v=D.view, nw=Math.max(160,Math.min(1600,v.w*f)), k=nw/v.w;
+  if(cx==null){cx=v.x+v.w/2; cy=v.y+v.h/2;}
+  v.x=cx-(cx-v.x)*k; v.y=cy-(cy-v.y)*k; v.w=nw; v.h=nw*DH/DW;
+}
+var ptrs={}, pinch=null;
 function wireDots(){
   var svg=document.getElementById("dsvg"); if(!svg) return;
+  ptrs={}; pinch=null;
+  svg.onwheel=function(ev){ev.preventDefault(); var p=svgPoint(svg,ev); zoomBy(ev.deltaY>0?1.12:1/1.12,p.x,p.y); viewApply(svg);};
   svg.onpointerdown=function(ev){
+    ptrs[ev.pointerId]={x:ev.clientX,y:ev.clientY};
+    try{svg.setPointerCapture(ev.pointerId);}catch(e){}
+    var ids=Object.keys(ptrs);
+    if(ids.length===2){
+      drag=null; var lv=document.getElementById("dlive"); if(lv) lv.setAttribute("d","");
+      var a=ptrs[ids[0]], b=ptrs[ids[1]];
+      pinch={d0:Math.hypot(a.x-b.x,a.y-b.y)||1,v0:Object.assign({},D.view),m0:{x:(a.x+b.x)/2,y:(a.y+b.y)/2},r:svg.getBoundingClientRect()};
+      ev.preventDefault(); return;
+    }
+    if(ids.length>2) return;
     var p=svgPoint(svg,ev), nodeEl=ev.target.closest("[data-node]"), edgeEl=ev.target.closest("[data-edge]");
     if(nodeEl){
       var n=dNode(D,nodeEl.getAttribute("data-node"));
-      drag=D.mode==="move"?{t:"move",id:n.id,dx:p.x-n.x,dy:p.y-n.y,moved:false,sx:p.x,sy:p.y}:{t:"draw",from:n.id,pts:[p],moved:false,sx:p.x,sy:p.y};
-      try{svg.setPointerCapture(ev.pointerId);}catch(e){}
-      ev.preventDefault();
-    }else if(edgeEl){D.sel={t:"edge",id:edgeEl.getAttribute("data-edge")}; D.pending=null; paintDots();}
-    else if(D.sel||D.pending){D.sel=null; D.pending=null; paintDots();}
+      drag=D.mode==="move"?{t:"move",id:n.id,dx:p.x-n.x,dy:p.y-n.y,moved:false,cx:ev.clientX,cy:ev.clientY}:{t:"draw",from:n.id,pts:[p],moved:false,cx:ev.clientX,cy:ev.clientY};
+    }else if(edgeEl){
+      drag={t:"tapedge",id:edgeEl.getAttribute("data-edge"),moved:false,cx:ev.clientX,cy:ev.clientY};
+    }else{
+      drag={t:"pan",cx:ev.clientX,cy:ev.clientY,v0:Object.assign({},D.view),moved:false};
+    }
+    ev.preventDefault();
   };
   svg.onpointermove=function(ev){
-    if(!drag) return; var p=svgPoint(svg,ev);
-    if(Math.abs(p.x-drag.sx)+Math.abs(p.y-drag.sy)>6) drag.moved=true;
+    if(ptrs[ev.pointerId]) ptrs[ev.pointerId]={x:ev.clientX,y:ev.clientY};
+    if(pinch){
+      var ids=Object.keys(ptrs); if(ids.length<2) return;
+      var a=ptrs[ids[0]], b=ptrs[ids[1]], d=Math.hypot(a.x-b.x,a.y-b.y)||1, m={x:(a.x+b.x)/2,y:(a.y+b.y)/2}, r=pinch.r, v0=pinch.v0;
+      var nw=Math.max(160,Math.min(1600,v0.w*pinch.d0/d)), nh=nw*DH/DW;
+      var wx=v0.x+(pinch.m0.x-r.left)/r.width*v0.w, wy=v0.y+(pinch.m0.y-r.top)/r.height*v0.h;
+      D.view={x:wx-(m.x-r.left)/r.width*nw,y:wy-(m.y-r.top)/r.height*nh,w:nw,h:nh}; viewApply(svg); return;
+    }
+    if(!drag) return;
+    if(Math.abs(ev.clientX-drag.cx)+Math.abs(ev.clientY-drag.cy)>6) drag.moved=true;
+    if(drag.t==="pan"){
+      var rr=svg.getBoundingClientRect();
+      D.view.x=drag.v0.x-(ev.clientX-drag.cx)*drag.v0.w/rr.width;
+      D.view.y=drag.v0.y-(ev.clientY-drag.cy)*drag.v0.h/rr.height; viewApply(svg); return;
+    }
+    if(drag.t==="tapedge") return;
+    var p=svgPoint(svg,ev);
     if(drag.t==="move"){
-      var n=dNode(D,drag.id); n.x=clampX(p.x-drag.dx); n.y=clampY(p.y-drag.dy);
+      var n=dNode(D,drag.id); n.x=p.x-drag.dx; n.y=p.y-drag.dy;
       D.edges.forEach(function(e){if(e.from===n.id||e.to===n.id) e.pts=null;});
       if(drag.moved){var html=dotsSvg(D,{interactive:true,hiIds:[]}); svg.innerHTML=html.slice(html.indexOf(">")+1,html.lastIndexOf("</svg>"));}
     }else{
@@ -855,8 +906,12 @@ function wireDots(){
       var lv=document.getElementById("dlive"); if(lv) lv.setAttribute("d","M"+drag.pts.map(function(q){return q.x.toFixed(1)+" "+q.y.toFixed(1);}).join(" L"));
     }
   };
-  svg.onpointerup=svg.onpointercancel=function(ev){
+  var end=function(ev){
+    delete ptrs[ev.pointerId];
+    if(pinch){ if(Object.keys(ptrs).length<2) pinch=null; return; }
     if(!drag) return; var d0=drag; drag=null; var p=svgPoint(svg,ev);
+    if(d0.t==="pan"){ if(!d0.moved&&(D.sel||D.pending)){D.sel=null; D.pending=null; paintDots();} return; }
+    if(d0.t==="tapedge"){ if(!d0.moved){D.sel={t:"edge",id:d0.id}; D.pending=null; paintDots();} return; }
     if(d0.t==="move"){ if(!d0.moved){D.sel={t:"node",id:d0.id};} paintDots(); return; }
     var target=D.nodes.filter(function(n){return inside(n,p,6);})[0];
     if(d0.moved){
@@ -871,6 +926,7 @@ function wireDots(){
     }
     paintDots();
   };
+  svg.onpointerup=end; svg.onpointercancel=end;
 }
 
 document.getElementById("stop").onclick=function(){if(state.ctl)state.ctl.abort();};
