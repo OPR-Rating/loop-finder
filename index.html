@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Loop Finder</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Inter:wght@400;500;600&family=Gaegu:wght@400;700&display=swap">
+<style>
+/* Layout: one reading column. Ask box on top, then the map in two depths (Simple = hand-drawn story, Detailed = all loops + leverage), then "where answers come from". */
+:root{
+  --bg:#f3f5f1; --card:#ffffff; --ink:#18231c; --muted:#5d6b62; --line:#d6ddd5;
+  --accent:#2e7d5b; --accent-soft:#e2f1e9; --r:#c2512f; --r-soft:#f9e6df; --b:#2d6aa3; --b-soft:#e1ecf7; --note:#8a6a12; --note-soft:#fbf3dc;
+  --display:Fraunces,Georgia,serif; --body:Inter,system-ui,-apple-system,"Segoe UI",sans-serif; --hand:Gaegu,"Comic Sans MS","Segoe Print",cursive;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#111713; --card:#1a221d; --ink:#e5ece7; --muted:#9db0a4; --line:#2e3a33;
+  --accent:#6cc79b; --accent-soft:#1d3329; --r:#f08d6c; --r-soft:#3a231b; --b:#7fb2e6; --b-soft:#1b2a3a; --note:#e7c66b; --note-soft:#332b14; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111713; --card:#1a221d; --ink:#e5ece7; --muted:#9db0a4; --line:#2e3a33;
+  --accent:#6cc79b; --accent-soft:#1d3329; --r:#f08d6c; --r-soft:#3a231b; --b:#7fb2e6; --b-soft:#1b2a3a; --note:#e7c66b; --note-soft:#332b14; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15.5px;line-height:1.5;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 56px}
+.wrap{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance;letter-spacing:-.01em}
+h1{font-size:clamp(30px,6vw,44px);line-height:1.05}
+h2{font-size:24px;line-height:1.15}
+h3{font-size:18px}
+p{margin:0}
+.lede{color:var(--muted);max-width:60ch}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.eyebrow{font-size:11.5px;text-transform:uppercase;letter-spacing:.09em;font-weight:600;color:var(--muted)}
+label.eyebrow{display:block}
+textarea{font:inherit;width:100%;min-height:96px;border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--bg);color:var(--ink);resize:vertical}
+textarea:focus-visible,.btn:focus-visible,.chip:focus-visible,.seg button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font:inherit;font-size:13px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;padding:6px 12px;cursor:pointer}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.btn{font:inherit;font-weight:600;border-radius:12px;padding:11px 18px;cursor:pointer;border:1px solid var(--line);background:var(--card);color:var(--ink)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn[disabled]{opacity:.55;cursor:wait}
+.status{font-size:14px;color:var(--muted)}
+.status.err{color:var(--r)}
+.examplebar{font-size:13px;color:var(--note);background:var(--note-soft);border-radius:10px;padding:8px 12px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:999px;padding:3px;background:var(--card);align-self:flex-start}
+.seg button{font:inherit;font-size:14px;font-weight:600;border:0;background:none;color:var(--muted);padding:7px 16px;border-radius:999px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent);color:#fff}
+.ring{width:100%;max-width:560px;height:auto;display:block;margin:0 auto}
+.ringwrap{overflow-x:auto}
+.simple{font-family:var(--hand);font-size:22px;line-height:1.3}
+.simple h2{font-family:var(--hand);font-size:34px;font-weight:700}
+.steps{display:flex;flex-direction:column;gap:6px;padding:0;margin:0;list-style:none}
+.steps li{display:flex;gap:10px;align-items:baseline}
+.steps .n{font-weight:700;color:var(--accent);min-width:1.4em}
+.breakit{border:2px dashed var(--accent);border-radius:14px;padding:12px 14px;background:var(--accent-soft)}
+.tag{display:inline-block;font-size:12px;font-weight:600;border-radius:999px;padding:3px 10px}
+.tag.R{background:var(--r-soft);color:var(--r)}
+.tag.B{background:var(--b-soft);color:var(--b)}
+.tag.deep{background:var(--accent-soft);color:var(--accent)}
+.tag.medium{background:var(--b-soft);color:var(--b)}
+.tag.small{background:var(--bg);color:var(--muted)}
+.loops{display:grid;grid-template-columns:1fr;gap:14px}
+.lev{display:flex;flex-direction:column;gap:10px;margin:0;padding:0;list-style:none}
+.lev li{border-top:1px solid var(--line);padding-top:10px;display:flex;flex-direction:column;gap:4px}
+.lev li:first-child{border-top:0;padding-top:0}
+.first{font-size:14px;color:var(--muted)}
+.first b{color:var(--ink)}
+ul.plain{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
+.care{background:var(--note-soft);color:var(--ink);border-radius:12px;padding:12px 14px;font-size:14.5px}
+.layers{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+.layer{border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:4px;min-width:0}
+.layer .now{font-size:11.5px;font-weight:600;color:var(--accent)}
+.layer .later{font-size:11.5px;font-weight:600;color:var(--muted)}
+.layer p{font-size:14px;color:var(--muted)}
+.foot{font-size:12.5px;color:var(--muted)}
+@media (prefers-reduced-motion:no-preference){.spin{animation:sp 1.2s linear infinite;display:inline-block}@keyframes sp{to{transform:rotate(360deg)}}}
+</style>
+<style>body{margin:0}</style>
+</head>
+<body>
+
+
+<div class="wrap">
+  <header style="display:flex;flex-direction:column;gap:8px">
+    <span class="eyebrow">Systems thinking prototype</span>
+    <h1>Loop Finder</h1>
+    <p class="lede">Tell it what you're struggling with. It finds the circle you're stuck in, shows it simply or in detail, and points to where a small push changes the most.</p>
+  </header>
+
+  <section class="card" aria-labelledby="askh">
+    <label class="eyebrow" id="askh" for="ask">What are you struggling with?</label>
+    <p class="first" style="margin-top:-4px">Anything at all: money, school, work, family, health, sport, confidence. Write it the way you'd tell a friend.</p>
+    <textarea id="ask" placeholder="Type what's on your mind…"></textarea>
+    <span class="eyebrow" style="margin-top:4px">Or start from a popular topic</span>
+    <div class="chips" id="examples"></div>
+    <div class="row">
+      <button class="btn primary" id="go">Find my loop</button>
+      <button class="btn" id="stop" hidden>Stop</button>
+      <span class="status" id="status" aria-live="polite"></span>
+    </div>
+  </section>
+
+  <div id="result"></div>
+
+  <section class="card">
+    <span class="eyebrow">Where the answers come from</span>
+    <h2>Four sources, one map</h2>
+    <div class="layers">
+      <div class="layer"><span class="now">Coming first</span><h3>AI, with a systems recipe</h3><p>The app sends your words plus a fixed recipe: find the loops, name the pattern, rank the leverage points. The AI returns a map the app draws.</p></div>
+      <div class="layer"><span class="later">Next</span><h3>Trusted content</h3><p>Guides, videos and checklists from qualified teachers, coaches and advisers. The map links to the one that fits your loop.</p></div>
+      <div class="layer"><span class="later">Next</span><h3>Live facts</h3><p>A web search for things that change: house prices, deposit rules, exam dates. Shown with their sources, never guessed.</p></div>
+      <div class="layer"><span class="later">Later</span><h3>Your own results</h3><p>Check-ins, marks, savings or match scores. The app sees whether the loop is breaking and adjusts the next step.</p></div>
+    </div>
+  </section>
+  <p class="foot">Prototype. Maps are general guidance for thinking things through, not financial, medical or professional advice.</p>
+</div>
+
+<script>
+var TOPICS=[
+ ["Passing exams","I study every night for my exams but my results aren't improving and I'm exhausted."],
+ ["Saving money","Every month I plan to save but by the end of the month the money is gone."],
+ ["Buying a house","I want to buy a house but I can't seem to save a deposit. Rent keeps going up."],
+ ["Becoming independent","I want to move out and be independent but I keep relying on my parents for money."],
+ ["Finding a job","I keep applying for jobs but I never hear back, and I'm losing confidence."],
+ ["Always tired","I'm tired all the time, so I scroll on my phone at night to relax, and then I sleep badly."],
+ ["Getting fit","I start exercising every few weeks but I always stop after a few days."],
+ ["Feeling lonely","I feel lonely but when people invite me out I usually say no."],
+ ["Sport: not improving","I train every week and go to coaching, but I'm not getting any better at my sport."]
+];
+var EXAMPLES=TOPICS.map(function(t){return t[1];});
+var SAMPLE={
+ title:"Studying harder, scoring the same",
+ one_liner:"The more behind you feel, the later you study, the less you sleep, and the less sticks, so you feel even more behind.",
+ loops:[
+  {name:"The late-night cram spiral",type:"R",steps:["Feeling behind","Late-night studying","Less sleep","Weaker memory"],signs:["+","+","+","+"],story:"Feeling behind pushes study later into the night. Short sleep weakens memory, so mocks disappoint and you feel even further behind."},
+  {name:"Busy but not learning",type:"R",steps:["Re-reading notes","Feels productive","No self-testing","Gaps stay hidden"],signs:["+","+","+","+"],story:"Re-reading feels like progress, so it crowds out practice papers. Gaps stay hidden until the exam finds them."},
+  {name:"Burnout brake",type:"B",steps:["Study hours","Exhaustion","Focus"],signs:["+","-","+"],story:"More hours bring exhaustion, which cuts focus. Real learning hits a ceiling however long you sit there."}
+ ],
+ pattern:{name:"Fixes that Fail",plain:"More hours is the quick fix, but it eats the sleep and focus that make studying work."},
+ leverage:[
+  {where:"Late-night studying → Less sleep",move:"Set a hard stop time and protect 8 hours of sleep.",first_step:"This week, stop studying at 10pm every night and note your energy each morning.",strength:"deep"},
+  {where:"Re-reading notes",move:"Swap re-reading for self-testing with past papers.",first_step:"Do one timed past-paper section in your weakest subject, then mark it against the scheme.",strength:"deep"},
+  {where:"Feeling behind",move:"Track small wins so progress is visible.",first_step:"Keep a list of topics you can now answer from memory. Add to it daily.",strength:"medium"}
+ ],
+ questions:["Which subject's mock dropped most, and how do you revise it?","How many hours do you sleep before a school day?","When did studying last feel like it worked?"],
+ facts_to_check:["Your exam board's grade boundaries and past papers, from your school"],
+ care_note:""
+};
+var state={data:SAMPLE,isSample:true,view:"simple",ctl:null};
+function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
+
+function wrapLabel(t,max){var w=String(t).split(/\s+/),lines=[],cur="";w.forEach(function(x){if((cur+" "+x).trim().length>max&&cur){lines.push(cur);cur=x;}else cur=(cur+" "+x).trim();});if(cur)lines.push(cur);return lines.slice(0,3);}
+/* One loop drawn as a ring: steps on a circle, arrows round it, sign beside each arrow, R/B in the middle. */
+function ring(loop,opts){
+  opts=opts||{};var hand=!!opts.hand;
+  var steps=(loop.steps||[]).slice(0,6), n=steps.length; if(n<2) return "";
+  var W=560,H=hand?420:400,cx=W/2,cy=H/2,rx=hand?190:200,ry=hand?140:130,bw=hand?150:136,bh=hand?62:54;
+  var col=loop.type==="B"?"var(--b)":"var(--r)", soft=loop.type==="B"?"var(--b-soft)":"var(--r-soft)";
+  var pts=steps.map(function(_,i){var a=-Math.PI/2+2*Math.PI*i/n;return {x:cx+rx*Math.cos(a),y:cy+ry*Math.sin(a),a:a};});
+  var id="m"+Math.random().toString(36).slice(2,8);
+  var out='<svg class="ring" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+esc(loop.name)+': '+esc(steps.join(", then "))+', and back again"><defs><marker id="'+id+'" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="'+col+'"/></marker></defs>';
+  var gap=Math.min(0.62,Math.PI/n*0.62);
+  for(var i=0;i<n;i++){
+    var a1=pts[i].a+gap, a2=pts[i].a+2*Math.PI/n-gap;
+    var x1=cx+rx*Math.cos(a1),y1=cy+ry*Math.sin(a1),x2=cx+rx*Math.cos(a2),y2=cy+ry*Math.sin(a2);
+    out+='<path d="M'+x1.toFixed(1)+' '+y1.toFixed(1)+' A'+rx+' '+ry+' 0 0 1 '+x2.toFixed(1)+' '+y2.toFixed(1)+'" fill="none" stroke="'+col+'" stroke-width="'+(hand?3:2)+'" stroke-linecap="round"'+(hand?' stroke-dasharray="1 0"':'')+' marker-end="url(#'+id+')"/>';
+    var am=pts[i].a+Math.PI/n, sx=cx+(rx+24)*Math.cos(am), sy=cy+(ry+22)*Math.sin(am);
+    var sg=(loop.signs||[])[i]||"+";
+    if(!hand) out+='<circle cx="'+sx.toFixed(1)+'" cy="'+sy.toFixed(1)+'" r="11" fill="var(--card)" stroke="'+col+'"/><text x="'+sx.toFixed(1)+'" y="'+(sy+5).toFixed(1)+'" text-anchor="middle" font-size="15" font-weight="700" fill="'+col+'">'+(sg==="-"?"−":"+")+'</text>';
+  }
+  pts.forEach(function(p,i){
+    var lines=wrapLabel(steps[i],hand?15:17);
+    out+='<rect x="'+(p.x-bw/2).toFixed(1)+'" y="'+(p.y-bh/2).toFixed(1)+'" width="'+bw+'" height="'+bh+'" rx="'+(hand?18:10)+'" fill="'+(i===0?soft:'var(--card)')+'" stroke="'+col+'" stroke-width="'+(hand?2.5:1.5)+'"/>';
+    var lh=hand?19:16, y0=p.y-(lines.length-1)*lh/2+(hand?6:5);
+    lines.forEach(function(l,k){out+='<text x="'+p.x.toFixed(1)+'" y="'+(y0+k*lh).toFixed(1)+'" text-anchor="middle" font-size="'+(hand?20:13.5)+'" '+(hand?'font-family="Gaegu, Comic Sans MS, cursive" font-weight="700"':'font-family="Inter, system-ui, sans-serif" font-weight="600"')+' fill="var(--ink)">'+esc(l)+'</text>';});
+  });
+  out+='<text x="'+cx+'" y="'+(cy-4)+'" text-anchor="middle" font-size="'+(hand?40:30)+'" font-weight="700" '+(hand?'font-family="Gaegu, cursive"':'font-family="Fraunces, Georgia, serif"')+' fill="'+col+'">'+(loop.type==="B"?"B":"R")+'</text>';
+  out+='<text x="'+cx+'" y="'+(cy+20)+'" text-anchor="middle" font-size="'+(hand?18:12)+'" '+(hand?'font-family="Gaegu, cursive"':'')+' fill="var(--muted)">'+(loop.type==="B"?"holds you back":"snowballs")+'</text>';
+  return out+'</svg>';
+}
+
+function simpleView(d){
+  var L=d.loops[0], lv=d.leverage&&d.leverage[0];
+  return '<div class="card simple"><span class="eyebrow" style="font-family:var(--body)">The simple picture</span><h2>'+esc(L.name)+'</h2>'
+   +'<div class="ringwrap">'+ring(L,{hand:true})+'</div>'
+   +'<ol class="steps">'+L.steps.map(function(s,i){return '<li><span class="n">'+(i+1)+'.</span><span>'+esc(s)+(i===L.steps.length-1?' … and round again to <b>'+esc(L.steps[0])+'</b>':' →')+'</span></li>';}).join('')+'</ol>'
+   +(lv?'<div class="breakit"><b>Break it here:</b> '+esc(lv.move)+'<br><span style="font-size:19px">This week: '+esc(lv.first_step)+'</span></div>':'')
+   +'</div>';
+}
+function detailedView(d){
+  return '<div class="card"><span class="eyebrow">All the loops</span><p>'+esc(d.one_liner)+'</p><div class="loops">'
+   +d.loops.map(function(L){return '<div class="card" style="padding:14px"><div class="row"><h3>'+esc(L.name)+'</h3><span class="tag '+(L.type==="B"?"B":"R")+'">'+(L.type==="B"?"Balancing: holds you back":"Reinforcing: snowballs")+'</span></div><div class="ringwrap">'+ring(L)+'</div><p class="first">'+esc(L.story)+'</p></div>';}).join('')
+   +'</div><p class="first"><b>+</b> means both move the same way (more leads to more). <b>−</b> means they move opposite ways (more leads to less).</p></div>'
+   +(d.pattern&&d.pattern.name?'<div class="card"><span class="eyebrow">The pattern behind it</span><h3>'+esc(d.pattern.name)+'</h3><p>'+esc(d.pattern.plain)+'</p></div>':'')
+   +'<div class="card"><span class="eyebrow">Where to push, best first</span><ol class="lev">'
+   +(d.leverage||[]).map(function(l){return '<li><div class="row"><b>'+esc(l.move)+'</b><span class="tag '+esc(l.strength)+'">'+esc(l.strength)+' leverage</span></div><span class="first">At: '+esc(l.where)+'</span><span class="first"><b>This week:</b> '+esc(l.first_step)+'</span></li>';}).join('')+'</ol></div>'
+   +'<div class="card"><span class="eyebrow">Questions to sharpen your map</span><ul class="plain">'+(d.questions||[]).map(function(q){return '<li>'+esc(q)+'</li>';}).join('')+'</ul>'
+   +((d.facts_to_check||[]).length?'<span class="eyebrow" style="margin-top:6px">Facts to check where you live</span><ul class="plain">'+d.facts_to_check.map(function(q){return '<li>'+esc(q)+'</li>';}).join('')+'</ul>':'')+'</div>';
+}
+function render(){
+  var d=state.data, el=document.getElementById("result");
+  if(!d){el.innerHTML="";return;}
+  el.innerHTML='<div class="wrap" style="max-width:none">'
+   +(state.isSample?'<div class="examplebar">Example map, made in advance. Live maps from your own words are coming soon.</div>':'')
+   +'<div class="row" style="justify-content:space-between"><h2>'+esc(d.title)+'</h2>'
+   +'<div class="seg" role="group" aria-label="How much detail"><button id="v-simple" aria-pressed="'+(state.view==="simple")+'">Simple</button><button id="v-detail" aria-pressed="'+(state.view==="detail")+'">Detailed</button></div></div>'
+   +(d.care_note?'<div class="care">'+esc(d.care_note)+'</div>':'')
+   +(state.view==="simple"?simpleView(d):detailedView(d))+'</div>';
+  document.getElementById("v-simple").onclick=function(){state.view="simple";render();};
+  document.getElementById("v-detail").onclick=function(){state.view="detail";render();};
+}
+
+function prompt(text){
+  return 'You are a warm, practical systems-thinking coach. A person describes a struggle. Map the feedback loops that keep them stuck, in plain everyday English a 16-year-old understands (short words, no jargon).\n\n'
+  +'Reply with ONLY one JSON object, exactly this shape:\n'
+  +'{"title": "their situation, max 6 words",\n "one_liner": "one sentence: the core loop in plain words",\n'
+  +' "loops": [{"name": "catchy plain name, max 5 words", "type": "R or B (R = reinforcing, it snowballs; B = balancing, it pushes back or holds them at a limit)", "steps": ["3 to 5 labels, max 3 words each, in cause order; the last step leads back to the first"], "signs": ["+ or - for each link: step 1 to 2, 2 to 3, ..., last back to first. Same count as steps. + means they move the same way, - means opposite"], "story": "2 short sentences"}],\n'
+  +' "pattern": {"name": "the systems archetype, e.g. Fixes that Fail, Shifting the Burden, Limits to Growth, Success to the Successful, Escalation, Eroding Goals, Tragedy of the Commons, or None clear", "plain": "one sentence on what it means for them"},\n'
+  +' "leverage": [{"where": "the step or link to push on", "move": "what to change, one sentence", "first_step": "one concrete action they can take this week", "strength": "small, medium or deep"}],\n'
+  +' "questions": ["3 short questions that would sharpen the map"],\n'
+  +' "facts_to_check": ["0 to 3 facts that depend on their country, rules or current prices, which they should verify locally"],\n'
+  +' "care_note": "empty string, or one gentle sentence suggesting they talk to someone they trust or a helpline if their words suggest distress or danger"}\n\n'
+  +'Give 2 or 3 loops, the main one first. Give exactly 3 leverage points, strongest first. Keep advice general: no specific financial products, investments, medical or legal instructions.\n\n'
+  +'The person wrote:\n"""\n'+text.slice(0,3000)+'\n"""';
+}
+function valid(d){return d&&typeof d==="object"&&Array.isArray(d.loops)&&d.loops.length&&d.loops.every(function(l){return Array.isArray(l.steps)&&l.steps.length>=2;});}
+
+var sampleFn=null;
+var ERR={not_granted:"Claude wasn't allowed for this page, so only the example map is available.",sampling_disabled:"Claude isn't available on this account.",rate_limited:"Too many maps in a short time. Try again in a minute.",refused:"Claude couldn't map that. Try describing it differently.",invalid_json:"The map came back garbled. Press Find my loop again.",session_expired:"Please sign in again, then try."};
+function setBusy(b,msg,err){
+  document.getElementById("go").disabled=b; document.getElementById("stop").hidden=!b;
+  var s=document.getElementById("status"); s.className="status"+(err?" err":""); s.innerHTML=msg||"";
+}
+document.getElementById("go").onclick=async function(){
+  var text=document.getElementById("ask").value.trim();
+  if(!text){document.getElementById("ask").focus();setBusy(false,"Type what you're struggling with first.",true);return;}
+  if(!sampleFn){setBusy(false,"Live maps are coming soon. For now, explore the example map below.",true);document.getElementById("result").scrollIntoView({behavior:"smooth",block:"start"});return;}
+  state.ctl=new AbortController();
+  setBusy(true,'<span class="spin">◌</span> Finding the loops… this takes about 20–40 seconds.');
+  try{
+    var d=await sampleFn.json(prompt(text),{signal:state.ctl.signal,cache:false});
+    if(!valid(d)) throw {code:"invalid_json"};
+    state.data=d; state.isSample=false; state.view="simple"; setBusy(false,"");
+    render(); document.getElementById("result").scrollIntoView({behavior:"smooth",block:"start"});
+  }catch(e){
+    if(e&&e.code==="cancelled"){setBusy(false,"Stopped.");return;}
+    setBusy(false,(e&&ERR[e.code])||"Something went wrong reaching Claude. Press Find my loop to try again.",true);
+    if(e&&(e.code==="not_granted"||e.code==="sampling_disabled")) sampleFn=null;
+  }
+};
+document.getElementById("stop").onclick=function(){if(state.ctl)state.ctl.abort();};
+document.getElementById("examples").innerHTML=EXAMPLES.map(function(x,i){var short=TOPICS[i][0];return '<button class="chip" data-ex="'+i+'">'+short+'</button>';}).join("");
+document.getElementById("examples").onclick=function(e){var b=e.target.closest("[data-ex]");if(!b)return;var t=document.getElementById("ask");t.value=EXAMPLES[+b.dataset.ex];t.focus();};
+render();
+(async function(){try{if(window.claude&&claude.use){sampleFn=await claude.use("sample");}}catch(e){sampleFn=null;}})();
+</script>
+
+</body>
+</html>
