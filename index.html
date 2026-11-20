@@ -9,15 +9,15 @@
 /* Layout: one reading column. Ask box on top, then the map in two depths (Simple = hand-drawn story, Detailed = all loops + leverage), then "where answers come from". */
 :root{
   --bg:#f3f5f1; --card:#ffffff; --ink:#18231c; --muted:#5d6b62; --line:#d6ddd5;
-  --accent:#2e7d5b; --accent-soft:#e2f1e9; --r:#c2512f; --r-soft:#f9e6df; --b:#2d6aa3; --b-soft:#e1ecf7; --note:#8a6a12; --note-soft:#fbf3dc;
+  --accent:#2e7d5b; --accent-soft:#e2f1e9; --r:#c2512f; --r-soft:#f9e6df; --b:#2d6aa3; --b-soft:#e1ecf7; --note:#8a6a12; --note-soft:#fbf3dc; --violet:#7a4fa3;
   --display:Fraunces,Georgia,serif; --body:Inter,system-ui,-apple-system,"Segoe UI",sans-serif; --hand:Gaegu,"Comic Sans MS","Segoe Print",cursive;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --bg:#111713; --card:#1a221d; --ink:#e5ece7; --muted:#9db0a4; --line:#2e3a33;
-  --accent:#6cc79b; --accent-soft:#1d3329; --r:#f08d6c; --r-soft:#3a231b; --b:#7fb2e6; --b-soft:#1b2a3a; --note:#e7c66b; --note-soft:#332b14; color-scheme:dark}}
+  --accent:#6cc79b; --accent-soft:#1d3329; --r:#f08d6c; --r-soft:#3a231b; --b:#7fb2e6; --b-soft:#1b2a3a; --note:#e7c66b; --note-soft:#332b14; --violet:#b79be0; color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#111713; --card:#1a221d; --ink:#e5ece7; --muted:#9db0a4; --line:#2e3a33;
-  --accent:#6cc79b; --accent-soft:#1d3329; --r:#f08d6c; --r-soft:#3a231b; --b:#7fb2e6; --b-soft:#1b2a3a; --note:#e7c66b; --note-soft:#332b14; color-scheme:dark}
+  --accent:#6cc79b; --accent-soft:#1d3329; --r:#f08d6c; --r-soft:#3a231b; --b:#7fb2e6; --b-soft:#1b2a3a; --note:#e7c66b; --note-soft:#332b14; --violet:#b79be0; color-scheme:dark}
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15.5px;line-height:1.5;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 56px}
 .wrap{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
@@ -87,6 +87,15 @@ ul.plain{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
 .optbtn[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft);font-weight:600}
 .optbtn small{display:block;color:var(--muted);font-weight:400;font-size:13px}
 .optbtn:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.mbranch{border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.mhead{display:flex;align-items:center;gap:8px;font-weight:600}
+.mdot{width:12px;height:12px;border-radius:50%;flex:none}
+.mchips{display:flex;flex-wrap:wrap;gap:6px}
+.mchip{font:inherit;font-size:13px;border-radius:999px;padding:4px 10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer}
+.mchip:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.madd{display:flex;gap:6px}
+.madd .gin{flex:1;min-width:0;padding:9px 12px}
+.mindsvg{width:100%;max-width:600px;height:auto;display:block;margin:0 auto}
 .ownbar{font-size:13px;color:var(--accent);background:var(--accent-soft);border-radius:10px;padding:8px 12px}
 @media (prefers-reduced-motion:no-preference){.spin{animation:sp 1.2s linear infinite;display:inline-block}@keyframes sp{to{transform:rotate(360deg)}}}
 </style>
@@ -218,7 +227,7 @@ function simpleView(d){
    +'</div>';
 }
 function detailedView(d){
-  return '<div class="card"><span class="eyebrow">All the loops</span><p>'+esc(d.one_liner)+'</p><div class="loops">'
+  return mindCard()+'<div class="card"><span class="eyebrow">All the loops</span><p>'+esc(d.one_liner)+'</p><div class="loops">'
    +d.loops.map(function(L){return '<div class="card" style="padding:14px"><div class="row"><h3>'+esc(L.name)+'</h3><span class="tag '+(L.type==="B"?"B":"R")+'">'+(L.type==="B"?"Balancing: holds you back":"Reinforcing: snowballs")+'</span></div><div class="ringwrap">'+ring(L)+'</div><p class="first">'+esc(L.story)+'</p></div>';}).join('')
    +'</div><p class="first"><b>+</b> means both move the same way (more leads to more). <b>−</b> means they move opposite ways (more leads to less).</p></div>'
    +(d.pattern&&d.pattern.name?'<div class="card"><span class="eyebrow">The pattern behind it</span><h3>'+esc(d.pattern.name)+'</h3><p>'+esc(d.pattern.plain)+'</p></div>':'')
@@ -232,7 +241,7 @@ function render(){
   if(!d){el.innerHTML="";return;}
   el.innerHTML='<div class="wrap" style="max-width:none">'
    +(state.isSample?'<div class="examplebar">Example map, made in advance. Type your own struggle above to make yours.</div>':'')
-   +(state.isOwn?'<div class="ownbar">Your own map, built from your answers'+(state.coach?'.':'. Nothing has been sent anywhere.')+'</div>':'')
+   +(state.isOwn?'<div class="ownbar">Your own map, built from your answers'+(state.coach?'.':'. Nothing has been sent anywhere.')+(mindCount(state.mind)?' Your mind map is in Detailed.':'')+'</div>':'')
    +'<div class="row" style="justify-content:space-between"><h2>'+esc(d.title)+'</h2>'
    +'<div class="seg" role="group" aria-label="How much detail"><button id="v-simple" aria-pressed="'+(state.view==="simple")+'">Simple</button><button id="v-detail" aria-pressed="'+(state.view==="detail")+'">Detailed</button></div></div>'
    +(d.care_note?'<div class="care">'+esc(d.care_note)+'</div>':'')
@@ -264,7 +273,7 @@ document.getElementById("go").onclick=async function(){
     var r=await fetch(LF_API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text:text}),signal:state.ctl.signal});
     var d=null; try{d=await r.json();}catch(e){}
     if(!r.ok||!valid(d)){var code=(d&&d.error)||"garbled"; setBusy(false,MSG[code]||"Something went wrong. Press Find my loop to try again.",true); return;}
-    state.data=d; state.isSample=false; state.isOwn=false; state.coach=null; state.view="simple"; setBusy(false,"");
+    state.data=d; state.isSample=false; state.isOwn=false; state.coach=null; state.mind=null; state.view="simple"; setBusy(false,"");
     render(); document.getElementById("result").scrollIntoView({behavior:"smooth",block:"start"});
   }catch(e){
     if(e&&e.name==="AbortError"){setBusy(false,"Stopped.");return;}
@@ -327,7 +336,7 @@ var QS=[
 ];
 function stepsNow(){return ["a","b","c","d"].map(function(k){return (G.ans[k]||"").trim();}).filter(Boolean);}
 function startGuide(text){
-  G={i:0,ans:{},struggle:text}; drawGuide();
+  G={i:0,ans:{},struggle:text,stage:"mind",mind:mindEmpty()}; G.mind.center=cut(text,60); drawMind();
   var g=document.getElementById("guide"); g.hidden=false; g.scrollIntoView({behavior:"smooth",block:"start"});
 }
 function drawGuide(){
@@ -336,18 +345,21 @@ function drawGuide(){
   var body;
   if(Q.type==="text"){
     body='<input class="gin" id="gin" maxlength="'+Q.max+'" value="'+esc(val)+'" aria-label="Your answer" autocomplete="off">';
+    var mi=(G.mind&&["a","b","c","d"].indexOf(Q.k)>=0)?mindItems():[];
+    if(mi.length) body+='<span class="eyebrow">Or tap one from your mind map</span><div class="mchips">'+mi.map(function(t){return '<button class="mchip" data-fill="'+esc(t)+'">'+esc(t)+'</button>';}).join("")+'</div>';
   }else{
     body='<div class="opts">'+Q.options().map(function(o){return '<button class="optbtn" data-v="'+esc(o[0])+'" aria-pressed="'+(val===o[0])+'">'+esc(o[1])+(o[2]?'<small>'+esc(o[2])+'</small>':'')+'</button>';}).join("")+'</div>';
   }
   var hint=Q.hint?'<p class="first">'+esc(Q.hint).replace("{a}",q("a"))+'</p>':'';
-  g.innerHTML='<div class="prog" aria-hidden="true">'+bars+'</div><span class="eyebrow">Question '+(G.i+1)+' of '+QS.length+'</span>'
+  g.innerHTML='<div class="prog" aria-hidden="true">'+bars+'</div><span class="eyebrow">Step 2 of 2 \u00b7 Question '+(G.i+1)+' of '+QS.length+'</span>'
    +'<p class="gq">'+Q.ask()+'</p>'+hint+body
-   +'<div class="row"><button class="btn" id="gback"'+(G.i===0?' hidden':'')+'>Back</button><button class="btn primary" id="gnext">'+(G.i===QS.length-1?'See my loop':'Next')+'</button><span class="status err" id="gerr" aria-live="polite"></span></div>';
+   +'<div class="row"><button class="btn" id="gback">Back</button><button class="btn primary" id="gnext">'+(G.i===QS.length-1?'See my loop':'Next')+'</button><span class="status err" id="gerr" aria-live="polite"></span></div>';
   var inp=document.getElementById("gin");
   if(inp){inp.focus(); inp.onkeydown=function(e){if(e.key==="Enter"){e.preventDefault();next();}};}
+  Array.prototype.forEach.call(g.querySelectorAll("[data-fill]"),function(c){c.onclick=function(){var i=document.getElementById("gin"); i.value=c.dataset.fill.slice(0,Q.max); i.focus();};});
   Array.prototype.forEach.call(g.querySelectorAll(".optbtn"),function(b){b.onclick=function(){G.ans[Q.k]=b.dataset.v; next();};});
   document.getElementById("gnext").onclick=next;
-  document.getElementById("gback").onclick=function(){saveText(); if(G.i>0){G.i--; drawGuide();}};
+  document.getElementById("gback").onclick=function(){saveText(); if(G.i>0){G.i--; drawGuide();} else {G.stage="mind"; drawMind();}};
 }
 function saveText(){var inp=document.getElementById("gin"); if(inp) G.ans[QS[G.i].k]=inp.value.trim();}
 function next(){
@@ -373,7 +385,8 @@ function finishGuide(){
     leverage:[{where:A.lev,move:"Change what happens at “"+A.lev+"”.",first_step:A.act,strength:""}],
     questions:qs, facts_to_check:[], care_note:""
   };
-  state.ownLoop={struggle:G.struggle||A.a,steps:steps,type:type,pattern:pat.name,lever:A.lev,action:A.act,confidence:A.conf};
+  state.mind=G.mind;
+  state.ownLoop={struggle:((G.mind&&G.mind.center)||G.struggle||A.a)+mindSummary(G.mind),steps:steps,type:type,pattern:pat.name,lever:A.lev,action:A.act,confidence:A.conf};
   state.coach=null;
   state.isSample=false; state.isOwn=true; state.view="simple";
   document.getElementById("guide").hidden=true; render();
@@ -440,6 +453,74 @@ async function coachAsk(){
   }catch(e){ c.busy=false; if(c.history.length) c.history.pop(); c.err="Couldn't reach the coach. Check your internet and try again."; }
   paintCoach();
   var el=document.getElementById("coach"); if(el) el.scrollIntoView({behavior:"smooth",block:"start"});
+}
+
+
+/* ---------- Unpack it: a mind map before the loop ---------- */
+var BRANCHES=[
+ {k:"causes", label:"Causes", hint:"What feeds this? E.g. “Rent went up”, “No budget”", col:"var(--r)", x:300, y:16},
+ {k:"feelings", label:"Feelings", hint:"How does it make you feel? E.g. “Stressed”, “Ashamed”", col:"var(--b)", x:500, y:118},
+ {k:"people", label:"People involved", hint:"Who is part of it? E.g. “My partner”, “My boss”", col:"var(--accent)", x:440, y:300},
+ {k:"tried", label:"What I've tried", hint:"What have you already done? E.g. “A spending app”", col:"var(--note)", x:160, y:300},
+ {k:"help", label:"What would help", hint:"What could make a difference? E.g. “A savings plan”", col:"var(--violet)", x:100, y:118}
+];
+function mindEmpty(){var m={center:""}; BRANCHES.forEach(function(b){m[b.k]=[];}); return m;}
+function mindCount(m){return m?BRANCHES.reduce(function(n,b){return n+(m[b.k]||[]).length;},0):0;}
+function cut(t,n){t=String(t); return t.length>n?t.slice(0,n-1)+"…":t;}
+function mindSvg(m){
+  var W=600,H=430,cx=300,cy=228,bw=168;
+  var out='<svg class="mindsvg" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Mind map of '+esc(m.center||"my struggle")+'">';
+  var boxes=BRANCHES.map(function(b){
+    var items=m[b.k]||[], shown=items.slice(0,3), more=items.length-shown.length;
+    var lines=shown.map(function(t){return cut(t,22);}); if(more>0) lines.push("+"+more+" more");
+    var h=34+(lines.length?lines.length*18+4:0);
+    return {b:b,lines:lines,h:h,cxb:b.x,cyb:b.y+h/2};
+  });
+  boxes.forEach(function(o){out+='<line x1="'+cx+'" y1="'+cy+'" x2="'+o.cxb+'" y2="'+o.cyb+'" stroke="'+o.b.col+'" stroke-width="2" stroke-linecap="round" opacity="0.7"/>';});
+  var c=String(m.center||"My struggle"), cl=wrapLabel(c,24).slice(0,2);
+  out+='<ellipse cx="'+cx+'" cy="'+cy+'" rx="118" ry="44" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="2"/>';
+  cl.forEach(function(l,i){out+='<text x="'+cx+'" y="'+(cy+5-(cl.length-1)*9+i*18)+'" text-anchor="middle" font-size="15" font-weight="700" font-family="Inter, system-ui, sans-serif" fill="var(--ink)">'+esc(cut(l,26))+'</text>';});
+  boxes.forEach(function(o){
+    var x=o.b.x-bw/2, y=o.b.y;
+    out+='<rect x="'+x+'" y="'+y+'" width="'+bw+'" height="'+o.h+'" rx="10" fill="var(--card)" stroke="'+o.b.col+'" stroke-width="2"/>';
+    out+='<text x="'+o.b.x+'" y="'+(y+22)+'" text-anchor="middle" font-size="14" font-weight="700" font-family="Inter, system-ui, sans-serif" fill="'+o.b.col+'">'+esc(o.b.label)+'</text>';
+    o.lines.forEach(function(l,i){out+='<text x="'+(x+12)+'" y="'+(y+44+i*18)+'" font-size="13" font-family="Inter, system-ui, sans-serif" fill="var(--ink)">'+(l.charAt(0)==="+"?'':'• ')+esc(l)+'</text>';});
+  });
+  return out+'</svg>';
+}
+function mindCard(){
+  if(!state.isOwn||!state.mind||!mindCount(state.mind)) return '';
+  return '<div class="card"><span class="eyebrow">Your mind map</span><div class="ringwrap">'+mindSvg(state.mind)+'</div></div>';
+}
+function drawMind(){
+  var m=G.mind, g=document.getElementById("guide");
+  var rows=BRANCHES.map(function(b){
+    var chips=(m[b.k]||[]).map(function(t,i){return '<button class="mchip" data-b="'+b.k+'" data-i="'+i+'" aria-label="Remove '+esc(t)+'">'+esc(t)+' <span aria-hidden="true">×</span></button>';}).join("");
+    return '<div class="mbranch"><div class="mhead"><span class="mdot" style="background:'+b.col+'"></span>'+esc(b.label)+'</div>'
+      +'<p class="first">'+esc(b.hint)+'</p>'+(chips?'<div class="mchips">'+chips+'</div>':'')
+      +((m[b.k]||[]).length<6?'<div class="madd"><input class="gin" id="mi-'+b.k+'" maxlength="40" placeholder="Add an idea" aria-label="Add to '+esc(b.label)+'" autocomplete="off"><button class="btn" data-add="'+b.k+'">Add</button></div>':'')+'</div>';
+  }).join("");
+  g.innerHTML='<span class="eyebrow">Step 1 of 2 · Unpack it</span>'
+    +'<p class="gq">First, get it all out. Add a few words to any branch.</p>'
+    +'<p class="first">There are no wrong answers. Add what comes to mind, and skip any branch that doesn’t fit.</p>'
+    +'<label class="eyebrow" for="mcenter">In the middle: your struggle</label>'
+    +'<input class="gin" id="mcenter" maxlength="60" value="'+esc(m.center)+'" autocomplete="off">'
+    +'<div class="ringwrap">'+mindSvg(m)+'</div>'+rows
+    +'<div class="row"><button class="btn primary" id="mnext">Next: find my loop</button><button class="btn" id="mskip">Skip this step</button></div>';
+  document.getElementById("mcenter").onchange=function(){m.center=this.value.trim(); drawMind();};
+  Array.prototype.forEach.call(g.querySelectorAll("[data-add]"),function(btn){
+    var k=btn.dataset.add, inp=document.getElementById("mi-"+k);
+    var add=function(){var v=inp.value.trim(); if(!v) {inp.focus(); return;} m[k].push(v); drawMind(); var again=document.getElementById("mi-"+k); if(again) again.focus();};
+    btn.onclick=add; inp.onkeydown=function(e){if(e.key==="Enter"){e.preventDefault();add();}};
+  });
+  Array.prototype.forEach.call(g.querySelectorAll(".mchip"),function(c){c.onclick=function(){m[c.dataset.b].splice(+c.dataset.i,1); drawMind();};});
+  document.getElementById("mnext").onclick=function(){m.center=document.getElementById("mcenter").value.trim(); G.stage="q"; G.i=0; drawGuide(); document.getElementById("guide").scrollIntoView({behavior:"smooth",block:"start"});};
+  document.getElementById("mskip").onclick=function(){G.mind=mindEmpty(); G.mind.center=m.center; G.stage="q"; G.i=0; drawGuide(); document.getElementById("guide").scrollIntoView({behavior:"smooth",block:"start"});};
+}
+function mindItems(){var m=G.mind, all=[]; BRANCHES.forEach(function(b){(m[b.k]||[]).forEach(function(t){if(all.indexOf(t)<0) all.push(t);});}); return all;}
+function mindSummary(m){
+  if(!m||!mindCount(m)) return "";
+  return " | Their mind map: "+BRANCHES.filter(function(b){return (m[b.k]||[]).length;}).map(function(b){return b.label+": "+m[b.k].join(", ");}).join("; ");
 }
 
 document.getElementById("stop").onclick=function(){if(state.ctl)state.ctl.abort();};
