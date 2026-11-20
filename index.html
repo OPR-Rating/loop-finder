@@ -96,6 +96,16 @@ ul.plain{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
 .madd{display:flex;gap:6px}
 .madd .gin{flex:1;min-width:0;padding:9px 12px}
 .mindsvg{width:100%;max-width:600px;height:auto;display:block;margin:0 auto}
+.qa{display:flex;flex-direction:column;gap:6px;font-size:14.5px}
+.qa textarea{min-height:64px;resize:vertical}
+.myloop{display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--line);padding-top:10px}
+.myloop:first-of-type{border-top:0;padding-top:0}
+.mylink{font:inherit;text-align:left;background:none;border:0;padding:0;color:var(--ink);cursor:pointer;display:flex;flex-direction:column;gap:2px}
+.mylink span{font-size:13px;color:var(--muted)}
+.mylink:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.ci-list{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}
+.ci-list li{display:flex;flex-wrap:wrap;gap:6px;align-items:center;border-left:3px solid var(--line);padding-left:10px}
+.ci-list li .first{flex-basis:100%}
 .ownbar{font-size:13px;color:var(--accent);background:var(--accent-soft);border-radius:10px;padding:8px 12px}
 @media (prefers-reduced-motion:no-preference){.spin{animation:sp 1.2s linear infinite;display:inline-block}@keyframes sp{to{transform:rotate(360deg)}}}
 </style>
@@ -115,6 +125,8 @@ ul.plain{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
     <span class="eyebrow" id="beforeh">Before you start</span>
     <label class="consent" for="agree"><input type="checkbox" id="agree"><span>I understand that Loop Finder is a thinking tool, <b>not</b> therapy, counselling or professional advice, and that the people behind it are not psychologists, doctors or licensed advisers.</span></label>
   </section>
+
+  <section class="card" id="myloops" hidden></section>
 
   <section class="card" aria-labelledby="askh">
     <div class="seg" role="group" aria-label="How do you want to work?"><button id="m-ai" aria-pressed="true">Map it for me</button><button id="m-self" aria-pressed="false">Think it through myself</button></div>
@@ -149,7 +161,7 @@ ul.plain{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
     <span class="eyebrow" id="legalh">Important</span>
     <p><b>Loop Finder is a self-reflection tool.</b> It is not therapy, counselling, or medical, psychological, financial, legal or career advice, and the people behind it are not psychologists, doctors or licensed advisers. Maps are general ideas to help you think. Decide for yourself what is right for you, and speak to a qualified professional before making important decisions.</p>
     <p><b>If you are in distress or danger,</b> contact your local emergency services or a crisis helpline straight away, or talk to someone you trust.</p>
-    <p><b>Your words:</b> in "Map it for me", what you type is sent to an AI service to draw your map; Loop Finder does not keep it. Don't include names, ID numbers or other private details. In "Think it through myself", nothing leaves your phone unless you choose "Go deeper with the coach", which sends your loop and answers to the AI coach; Loop Finder does not keep them either.</p>
+    <p><b>Your words:</b> in "Map it for me", what you type is sent to an AI service to draw your map; Loop Finder does not keep it. Don't include names, ID numbers or other private details. Loops you save, your answers and your check-ins stay on this phone only. In "Think it through myself", nothing leaves your phone unless you choose "Go deeper with the coach", which sends your loop and answers to the AI coach; Loop Finder does not keep them either.</p>
     <p>Prototype, offered as is. Use at your own discretion.</p>
   </section>
 </div>
@@ -185,7 +197,7 @@ var SAMPLE={
  facts_to_check:["Your exam board's grade boundaries and past papers, from your school"],
  care_note:""
 };
-var state={data:SAMPLE,isSample:true,isOwn:false,view:"simple",ctl:null,mode:"ai"};
+var state={answers:{},savedId:null,ci:{},data:SAMPLE,isSample:true,isOwn:false,view:"simple",ctl:null,mode:"ai"};
 function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
 
 function wrapLabel(t,max){var w=String(t).split(/\s+/),lines=[],cur="";w.forEach(function(x){if((cur+" "+x).trim().length>max&&cur){lines.push(cur);cur=x;}else cur=(cur+" "+x).trim();});if(cur)lines.push(cur);return lines.slice(0,3);}
@@ -233,7 +245,7 @@ function detailedView(d){
    +(d.pattern&&d.pattern.name?'<div class="card"><span class="eyebrow">The pattern behind it</span><h3>'+esc(d.pattern.name)+'</h3><p>'+esc(d.pattern.plain)+'</p></div>':'')
    +'<div class="card"><span class="eyebrow">Where to push, best first</span><ol class="lev">'
    +(d.leverage||[]).map(function(l){return '<li><div class="row"><b>'+esc(l.move)+'</b>'+(l.strength?'<span class="tag '+esc(l.strength)+'">'+esc(l.strength)+' leverage</span>':'')+'</div><span class="first">At: '+esc(l.where)+'</span><span class="first"><b>This week:</b> '+esc(l.first_step)+'</span></li>';}).join('')+'</ol></div>'
-   +'<div class="card"><span class="eyebrow">Questions to sharpen your map</span><ul class="plain">'+(d.questions||[]).map(function(q){return '<li>'+esc(q)+'</li>';}).join('')+'</ul>'
+   +'<div class="card"><span class="eyebrow">Next</span><p class="first">Answer the questions about your map, save it and check in weekly under \u201cKeep going\u201d below.</p>'
    +((d.facts_to_check||[]).length?'<span class="eyebrow" style="margin-top:6px">Facts to check where you live</span><ul class="plain">'+d.facts_to_check.map(function(q){return '<li>'+esc(q)+'</li>';}).join('')+'</ul>':'')+'</div>';
 }
 function render(){
@@ -248,6 +260,7 @@ function render(){
    +(state.view==="simple"?simpleView(d):detailedView(d))+'</div>';
   document.getElementById("v-simple").onclick=function(){state.view="simple";render();};
   document.getElementById("v-detail").onclick=function(){state.view="detail";render();};
+  drawKeep();
   drawCoachSlot();
 }
 
@@ -273,7 +286,7 @@ document.getElementById("go").onclick=async function(){
     var r=await fetch(LF_API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text:text}),signal:state.ctl.signal});
     var d=null; try{d=await r.json();}catch(e){}
     if(!r.ok||!valid(d)){var code=(d&&d.error)||"garbled"; setBusy(false,MSG[code]||"Something went wrong. Press Find my loop to try again.",true); return;}
-    state.data=d; state.isSample=false; state.isOwn=false; state.coach=null; state.mind=null; state.view="simple"; setBusy(false,"");
+    state.data=d; state.isSample=false; state.isOwn=false; state.coach=null; state.mind=null; state.ownLoop=null; state.savedId=null; state.answers={}; state.ci={}; state.view="simple"; setBusy(false,"");
     render(); document.getElementById("result").scrollIntoView({behavior:"smooth",block:"start"});
   }catch(e){
     if(e&&e.name==="AbortError"){setBusy(false,"Stopped.");return;}
@@ -387,7 +400,7 @@ function finishGuide(){
   };
   state.mind=G.mind;
   state.ownLoop={struggle:((G.mind&&G.mind.center)||G.struggle||A.a)+mindSummary(G.mind),steps:steps,type:type,pattern:pat.name,lever:A.lev,action:A.act,confidence:A.conf};
-  state.coach=null;
+  state.coach=null; state.savedId=null; state.answers={}; state.ci={};
   state.isSample=false; state.isOwn=true; state.view="simple";
   document.getElementById("guide").hidden=true; render();
   document.getElementById("result").scrollIntoView({behavior:"smooth",block:"start"});
@@ -397,7 +410,7 @@ function finishGuide(){
 /* ---------- Go deeper with the coach (AI asks, the person answers) ---------- */
 var COACH_N=3;
 function drawCoachSlot(){
-  if(!state.isOwn||!LIVE||!state.ownLoop) return;
+  if(!LIVE||!state.data||state.isSample) return; ensureOwnLoop(); if(!state.ownLoop) return;
   var wrap=document.querySelector("#result .wrap"); if(!wrap) return;
   var card=document.createElement("section"); card.className="card"; card.id="coach"; card.setAttribute("aria-live","polite");
   wrap.appendChild(card); paintCoach();
@@ -406,7 +419,7 @@ function paintCoach(){
   var c=state.coach, el=document.getElementById("coach"); if(!el) return;
   var h;
   if(!c){
-    h='<span class="eyebrow">Go deeper</span><h3>Want a coach to ask you a few questions?</h3>'
+    h='<span class="eyebrow">Go deeper</span><h3>'+((curSaved()&&(curSaved().checkins||[]).length)?'Talk your check-in through with the coach':'Want a coach to ask you a few questions?')+'</h3>'
      +'<p class="first">'+COACH_N+' short questions about your loop, one at a time. The coach asks, you answer: it won’t tell you what to do. Your loop and answers are sent to the AI coach and not kept.</p>'
      +'<div class="row"><button class="btn primary" id="cstart">Go deeper with the coach</button></div>';
   }else if(c.busy){
@@ -437,18 +450,19 @@ function paintCoach(){
   };
   if((b=document.getElementById("cuse"))) b.onclick=function(){
     state.data.leverage[0].first_step=state.coach.result.better_step; state.ownLoop.action=state.coach.result.better_step;
-    state.coach.used=true; render();
+    state.coach.used=true; updateSaved(function(x){x.data=state.data; x.ownLoop=state.ownLoop;}); render();
   };
   var ta=document.getElementById("canswer"); if(ta) ta.focus();
 }
 async function coachAsk(){
   var c=state.coach; c.busy=true; c.err=""; paintCoach();
   try{
-    var r=await fetch(LF_API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mode:"coach",loop:state.ownLoop,history:c.history})});
+    var r=await fetch(LF_API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mode:"coach",loop:Object.assign({},state.ownLoop,{progress:progressText()}),history:c.history})});
     var d=null; try{d=await r.json();}catch(e){}
     c.busy=false;
     if(!r.ok||!d){ if(c.history.length&&!(d&&d.error==="limit")) c.history.pop(); c.err=MSG[(d&&d.error)||"garbled"]||"Something went wrong. Try again."; paintCoach(); return; }
-    if(d.done){c.result={summary:d.summary||"",better_step:d.better_step||""};}
+    if(d.done){c.result={summary:d.summary||"",better_step:d.better_step||""};
+      updateSaved(function(x){x.coachNotes=x.coachNotes||[]; x.coachNotes.push({date:new Date().toISOString(),summary:c.result.summary,better_step:c.result.better_step});});}
     else{c.question=d.question;}
   }catch(e){ c.busy=false; if(c.history.length) c.history.pop(); c.err="Couldn't reach the coach. Check your internet and try again."; }
   paintCoach();
@@ -523,10 +537,146 @@ function mindSummary(m){
   return " | Their mind map: "+BRANCHES.filter(function(b){return (m[b.k]||[]).length;}).map(function(b){return b.label+": "+m[b.k].join(", ");}).join("; ");
 }
 
+
+/* ---------- Keep going: answers, My loops, weekly check-ins, coach follow-ups (stored on this phone only) ---------- */
+var KEY="lf_loops";
+function loadLoops(){try{var a=JSON.parse(localStorage.getItem(KEY)||"[]"); return Array.isArray(a)?a:[];}catch(e){return [];}}
+function storeLoops(a){try{localStorage.setItem(KEY,JSON.stringify(a)); return true;}catch(e){return false;}}
+function curSaved(){if(!state.savedId) return null; return loadLoops().filter(function(x){return x.id===state.savedId;})[0]||null;}
+function updateSaved(fn){
+  if(!state.savedId) return false;
+  var a=loadLoops(), it=a.filter(function(x){return x.id===state.savedId;})[0];
+  if(!it) return false; fn(it); var ok=storeLoops(a); drawMyLoops(); return ok;
+}
+function ensureOwnLoop(){
+  if(state.ownLoop||!state.data||!state.data.loops) return;
+  var d=state.data, L=d.loops[0], lv=(d.leverage||[])[0]||{};
+  state.ownLoop={struggle:d.title+": "+(d.one_liner||""),steps:L.steps,type:L.type,pattern:(d.pattern||{}).name||"",lever:lv.where||"",action:lv.first_step||"",confidence:""};
+}
+function fmtDate(iso){try{return new Date(iso).toLocaleDateString(undefined,{day:"numeric",month:"short"});}catch(e){return "";}}
+var DID={yes:"Did it",partly:"Partly",no:"Not yet"}, FEEL={weaker:"Loop weaker",same:"Loop the same",stronger:"Loop stronger"};
+
+function progressText(){
+  var it=curSaved(); if(!it) return "";
+  var parts=[];
+  var qs=(it.data.questions||[]), ans=it.answers||{};
+  qs.forEach(function(q,i){if(ans[i]) parts.push("They answered “"+q+"” with: "+ans[i]);});
+  (it.checkins||[]).forEach(function(c){parts.push("Check-in "+fmtDate(c.date)+": "+(DID[c.did]||c.did)+"; "+(FEEL[c.feel]||c.feel)+(c.what?"; what happened: "+c.what:""));});
+  (it.coachNotes||[]).forEach(function(n){parts.push("Earlier coach session "+fmtDate(n.date)+": "+n.summary+(n.better_step?" Their step then: "+n.better_step:""));});
+  return parts.join("\n");
+}
+
+/* My loops list near the top */
+var pendingDelete=null;
+function drawMyLoops(){
+  var el=document.getElementById("myloops"); if(!el) return;
+  var a=loadLoops(); el.hidden=!a.length; if(!a.length){el.innerHTML="";return;}
+  el.innerHTML='<span class="eyebrow">My loops · on this phone only</span>'
+   +a.slice().reverse().map(function(it){
+      var last=(it.checkins||[]).slice(-1)[0];
+      var sub="Saved "+fmtDate(it.created)+(last?" · last check-in "+fmtDate(last.date)+": "+(FEEL[last.feel]||""):" · no check-in yet");
+      var del=pendingDelete===it.id
+        ?'<span class="first">Delete for good?</span><button class="btn" data-delyes="'+it.id+'">Yes, delete</button><button class="btn" data-delno="1">No</button>'
+        :'<button class="btn" data-del="'+it.id+'" aria-label="Delete '+esc(it.title)+'">Delete</button>';
+      return '<div class="myloop"><button class="mylink" data-open="'+it.id+'"><b>'+esc(it.title)+'</b><span>'+esc(sub)+'</span></button><div class="row">'+del+'</div></div>';
+    }).join("");
+  Array.prototype.forEach.call(el.querySelectorAll("[data-open]"),function(b){b.onclick=function(){openLoop(b.dataset.open);};});
+  Array.prototype.forEach.call(el.querySelectorAll("[data-del]"),function(b){b.onclick=function(){pendingDelete=b.dataset.del; drawMyLoops();};});
+  Array.prototype.forEach.call(el.querySelectorAll("[data-delno]"),function(b){b.onclick=function(){pendingDelete=null; drawMyLoops();};});
+  Array.prototype.forEach.call(el.querySelectorAll("[data-delyes]"),function(b){b.onclick=function(){
+    var id=b.dataset.delyes; storeLoops(loadLoops().filter(function(x){return x.id!==id;})); pendingDelete=null;
+    if(state.savedId===id){state.savedId=null; render();} drawMyLoops();
+  };});
+}
+function openLoop(id,toCheckin){
+  var it=loadLoops().filter(function(x){return x.id===id;})[0]; if(!it) return;
+  state.data=it.data; state.mind=it.mind||null; state.ownLoop=it.ownLoop||null; state.isOwn=!!it.isOwn;
+  state.isSample=false; state.answers=it.answers||{}; state.savedId=id; state.coach=null; state.ci={}; state.view="simple";
+  document.getElementById("guide").hidden=true; render();
+  var t=document.getElementById(toCheckin?"checkin":"result"); if(t) t.scrollIntoView({behavior:"smooth",block:"start"});
+}
+
+/* The Keep going card under every map */
+function drawKeep(){
+  if(state.isSample||!state.data) return;
+  var wrap=document.querySelector("#result .wrap"); if(!wrap) return;
+  var card=document.createElement("section"); card.className="card"; card.id="keep";
+  wrap.appendChild(card); paintKeep();
+}
+function paintKeep(){
+  var el=document.getElementById("keep"); if(!el) return;
+  var d=state.data, ans=state.answers||{}, it=curSaved(); state.ci=state.ci||{};
+  var h='<span class="eyebrow">Keep going</span><h3>Questions to sharpen your map</h3>'
+   +(d.questions||[]).map(function(q,i){return '<label class="qa"><span>'+esc(q)+'</span><textarea class="gin" data-qa="'+i+'" maxlength="500" placeholder="Your answer">'+esc(ans[i]||"")+'</textarea></label>';}).join("");
+  if(!it){
+    h+='<div class="row"><button class="btn primary" id="ksave">Save my loop</button><span class="status" id="kmsg"></span></div>'
+      +'<p class="first">Saved on this phone only. Nobody else can see it, and it stays until you delete it or clear your browser.</p>';
+  }else{
+    h+='<div class="ownbar">Saved in My loops, on this phone only. Your answers save as you type.</div>'
+      +'<div class="row"><button class="btn" id="kremind">Remind me in a week</button><span class="status" id="kmsg"></span></div>';
+    var cs=it.checkins||[];
+    h+='<h3 id="checkin" style="margin-top:6px">Weekly check-in</h3>';
+    if(cs.length){
+      h+='<ol class="ci-list">'+cs.map(function(c,i){return '<li><b>Week '+(i+1)+' · '+esc(fmtDate(c.date))+'</b><span class="tag '+(c.feel==="weaker"?"deep":c.feel==="stronger"?"R":"small")+'">'+esc(FEEL[c.feel]||"")+'</span><span class="first">'+esc(DID[c.did]||"")+(c.what?': '+esc(c.what):'')+'</span></li>';}).join("")+'</ol>';
+    }
+    var step=((d.leverage||[])[0]||{}).first_step||"";
+    h+=(step?'<p class="first">Your small step: <b>'+esc(step)+'</b></p>':'')
+      +'<p class="first">Did you do your small step?</p><div class="chips">'+['yes','partly','no'].map(function(v){return '<button class="chip" data-did="'+v+'" aria-pressed="'+(state.ci.did===v)+'">'+DID[v]+'</button>';}).join("")+'</div>'
+      +'<label class="qa"><span>What happened?</span><textarea class="gin" id="ciwhat" maxlength="500" placeholder="A few words is enough">'+esc(state.ci.what||"")+'</textarea></label>'
+      +'<p class="first">How does the loop feel now?</p><div class="chips">'+['weaker','same','stronger'].map(function(v){return '<button class="chip" data-feel="'+v+'" aria-pressed="'+(state.ci.feel===v)+'">'+FEEL[v]+'</button>';}).join("")+'</div>'
+      +'<div class="row"><button class="btn primary" id="cisave">Save check-in</button><span class="status err" id="cierr"></span></div>';
+  }
+  el.innerHTML=h;
+  Array.prototype.forEach.call(el.querySelectorAll("[data-qa]"),function(t){t.oninput=function(){
+    state.answers=state.answers||{}; state.answers[t.dataset.qa]=t.value.trim();
+    updateSaved(function(x){x.answers=state.answers;});
+  };});
+  var b;
+  if((b=document.getElementById("ksave"))) b.onclick=function(){
+    ensureOwnLoop();
+    var id=Date.now().toString(36);
+    var a=loadLoops(); a.push({id:id,created:new Date().toISOString(),title:d.title,data:d,mind:state.mind||null,ownLoop:state.ownLoop,isOwn:!!state.isOwn,answers:state.answers||{},checkins:[],coachNotes:[]});
+    if(!storeLoops(a)){document.getElementById("kmsg").textContent="Couldn't save on this phone. Private browsing may be on.";return;}
+    state.savedId=id; drawMyLoops(); render();
+    var k=document.getElementById("keep"); if(k) k.scrollIntoView({behavior:"smooth",block:"start"});
+  };
+  if((b=document.getElementById("kremind"))) b.onclick=function(){remindIcs(); document.getElementById("kmsg").textContent="Open the downloaded file to add it to your calendar.";};
+  Array.prototype.forEach.call(el.querySelectorAll("[data-did]"),function(c){c.onclick=function(){state.ci.did=c.dataset.did; state.ci.what=(document.getElementById("ciwhat")||{}).value||""; paintKeep();};});
+  Array.prototype.forEach.call(el.querySelectorAll("[data-feel]"),function(c){c.onclick=function(){state.ci.feel=c.dataset.feel; state.ci.what=(document.getElementById("ciwhat")||{}).value||""; paintKeep();};});
+  if((b=document.getElementById("cisave"))) b.onclick=function(){
+    var what=document.getElementById("ciwhat").value.trim();
+    if(!state.ci.did||!state.ci.feel){document.getElementById("cierr").textContent="Pick an answer for both questions.";return;}
+    updateSaved(function(x){x.checkins=x.checkins||[]; x.checkins.push({date:new Date().toISOString(),did:state.ci.did,feel:state.ci.feel,what:what});});
+    state.ci={}; state.coach=null; render();
+    var t=document.getElementById("checkin"); if(t) t.scrollIntoView({behavior:"smooth",block:"start"});
+  };
+}
+
+/* Calendar reminder a week from now, linking back to this loop */
+function icsEsc(s){return String(s).replace(/\\/g,"\\\\").replace(/([,;])/g,"\\$1").replace(/\n/g,"\\n");}
+function remindIcs(){
+  var it=curSaved(); if(!it) return;
+  var start=new Date(); start.setDate(start.getDate()+7); start.setHours(18,0,0,0);
+  var end=new Date(start.getTime()+15*60000);
+  var f=function(x){return x.toISOString().replace(/[-:]/g,"").replace(/\.\d{3}/,"");};
+  var url=location.origin+location.pathname+"#loop-"+it.id;
+  var ics=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Loop Finder//EN","BEGIN:VEVENT",
+    "UID:"+it.id+"-"+Date.now()+"@loopfinder","DTSTAMP:"+f(new Date()),"DTSTART:"+f(start),"DTEND:"+f(end),
+    "SUMMARY:"+icsEsc("Loop Finder check-in: "+it.title),
+    "DESCRIPTION:"+icsEsc("Did you do your small step? Open your loop: "+url),"URL:"+url,
+    "BEGIN:VALARM","ACTION:DISPLAY","DESCRIPTION:"+icsEsc("Loop Finder check-in"),"TRIGGER:-PT0M","END:VALARM",
+    "END:VEVENT","END:VCALENDAR"].join("\r\n");
+  var a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([ics],{type:"text/calendar"}));
+  a.download="loop-finder-check-in.ics"; document.body.appendChild(a); a.click();
+  setTimeout(function(){URL.revokeObjectURL(a.href); a.remove();},2000);
+}
+
 document.getElementById("stop").onclick=function(){if(state.ctl)state.ctl.abort();};
 document.getElementById("examples").innerHTML=EXAMPLES.map(function(x,i){var short=TOPICS[i][0];return '<button class="chip" data-ex="'+i+'">'+short+'</button>';}).join("");
 document.getElementById("examples").onclick=function(e){var b=e.target.closest("[data-ex]");if(!b)return;var t=document.getElementById("ask");t.value=EXAMPLES[+b.dataset.ex];t.focus();};
 render();
+drawMyLoops();
+(function(){var m=/^#loop-(.+)$/.exec(location.hash); if(m) openLoop(decodeURIComponent(m[1]),true);})();
 
 </script>
 
