@@ -140,7 +140,7 @@ ul.plain{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
     <span class="eyebrow" id="legalh">Important</span>
     <p><b>Loop Finder is a self-reflection tool.</b> It is not therapy, counselling, or medical, psychological, financial, legal or career advice, and the people behind it are not psychologists, doctors or licensed advisers. Maps are general ideas to help you think. Decide for yourself what is right for you, and speak to a qualified professional before making important decisions.</p>
     <p><b>If you are in distress or danger,</b> contact your local emergency services or a crisis helpline straight away, or talk to someone you trust.</p>
-    <p><b>Your words:</b> in "Map it for me", what you type is sent to an AI service to draw your map; Loop Finder does not keep it. Don't include names, ID numbers or other private details. In "Think it through myself", nothing leaves your phone.</p>
+    <p><b>Your words:</b> in "Map it for me", what you type is sent to an AI service to draw your map; Loop Finder does not keep it. Don't include names, ID numbers or other private details. In "Think it through myself", nothing leaves your phone unless you choose "Go deeper with the coach", which sends your loop and answers to the AI coach; Loop Finder does not keep them either.</p>
     <p>Prototype, offered as is. Use at your own discretion.</p>
   </section>
 </div>
@@ -232,13 +232,14 @@ function render(){
   if(!d){el.innerHTML="";return;}
   el.innerHTML='<div class="wrap" style="max-width:none">'
    +(state.isSample?'<div class="examplebar">Example map, made in advance. Type your own struggle above to make yours.</div>':'')
-   +(state.isOwn?'<div class="ownbar">Your own map, built from your answers. Nothing was sent anywhere.</div>':'')
+   +(state.isOwn?'<div class="ownbar">Your own map, built from your answers'+(state.coach?'.':'. Nothing has been sent anywhere.')+'</div>':'')
    +'<div class="row" style="justify-content:space-between"><h2>'+esc(d.title)+'</h2>'
    +'<div class="seg" role="group" aria-label="How much detail"><button id="v-simple" aria-pressed="'+(state.view==="simple")+'">Simple</button><button id="v-detail" aria-pressed="'+(state.view==="detail")+'">Detailed</button></div></div>'
    +(d.care_note?'<div class="care">'+esc(d.care_note)+'</div>':'')
    +(state.view==="simple"?simpleView(d):detailedView(d))+'</div>';
   document.getElementById("v-simple").onclick=function(){state.view="simple";render();};
   document.getElementById("v-detail").onclick=function(){state.view="detail";render();};
+  drawCoachSlot();
 }
 
 function valid(d){return d&&typeof d==="object"&&Array.isArray(d.loops)&&d.loops.length&&d.loops.every(function(l){return Array.isArray(l.steps)&&l.steps.length>=2;});}
@@ -263,7 +264,7 @@ document.getElementById("go").onclick=async function(){
     var r=await fetch(LF_API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text:text}),signal:state.ctl.signal});
     var d=null; try{d=await r.json();}catch(e){}
     if(!r.ok||!valid(d)){var code=(d&&d.error)||"garbled"; setBusy(false,MSG[code]||"Something went wrong. Press Find my loop to try again.",true); return;}
-    state.data=d; state.isSample=false; state.isOwn=false; state.view="simple"; setBusy(false,"");
+    state.data=d; state.isSample=false; state.isOwn=false; state.coach=null; state.view="simple"; setBusy(false,"");
     render(); document.getElementById("result").scrollIntoView({behavior:"smooth",block:"start"});
   }catch(e){
     if(e&&e.name==="AbortError"){setBusy(false,"Stopped.");return;}
@@ -372,9 +373,73 @@ function finishGuide(){
     leverage:[{where:A.lev,move:"Change what happens at “"+A.lev+"”.",first_step:A.act,strength:""}],
     questions:qs, facts_to_check:[], care_note:""
   };
+  state.ownLoop={struggle:G.struggle||A.a,steps:steps,type:type,pattern:pat.name,lever:A.lev,action:A.act,confidence:A.conf};
+  state.coach=null;
   state.isSample=false; state.isOwn=true; state.view="simple";
   document.getElementById("guide").hidden=true; render();
   document.getElementById("result").scrollIntoView({behavior:"smooth",block:"start"});
+}
+
+
+/* ---------- Go deeper with the coach (AI asks, the person answers) ---------- */
+var COACH_N=3;
+function drawCoachSlot(){
+  if(!state.isOwn||!LIVE||!state.ownLoop) return;
+  var wrap=document.querySelector("#result .wrap"); if(!wrap) return;
+  var card=document.createElement("section"); card.className="card"; card.id="coach"; card.setAttribute("aria-live","polite");
+  wrap.appendChild(card); paintCoach();
+}
+function paintCoach(){
+  var c=state.coach, el=document.getElementById("coach"); if(!el) return;
+  var h;
+  if(!c){
+    h='<span class="eyebrow">Go deeper</span><h3>Want a coach to ask you a few questions?</h3>'
+     +'<p class="first">'+COACH_N+' short questions about your loop, one at a time. The coach asks, you answer: it won’t tell you what to do. Your loop and answers are sent to the AI coach and not kept.</p>'
+     +'<div class="row"><button class="btn primary" id="cstart">Go deeper with the coach</button></div>';
+  }else if(c.busy){
+    h='<span class="eyebrow">Go deeper</span><p class="status"><span class="spin">◌</span> The coach is thinking…</p>';
+  }else if(c.err){
+    h='<span class="eyebrow">Go deeper</span><p class="status err">'+esc(c.err)+'</p><div class="row"><button class="btn" id="cretry">Try again</button></div>';
+  }else if(c.result){
+    var r=c.result;
+    h='<span class="eyebrow">What you discovered</span><p>'+esc(r.summary)+'</p>'
+     +(r.better_step?'<div class="breakit" style="font-family:var(--body);font-size:15px"><b>Your sharper step:</b> '+esc(r.better_step)+'</div>'
+       +(c.used?'<p class="toast" style="color:var(--accent);font-weight:600">Done. Your map now shows this step.</p>':'<div class="row"><button class="btn primary" id="cuse">Use this as my step</button></div>'):'')
+     +'<p class="first">Come back in a week and ask yourself: did the loop start to break?</p>';
+  }else{
+    var n=c.history.length+1;
+    h='<div class="prog" aria-hidden="true">'+Array.from({length:COACH_N},function(_,i){return '<span class="'+(i<n?'on':'')+'"></span>';}).join("")+'</div>'
+     +'<span class="eyebrow">The coach asks ('+n+' of '+COACH_N+')</span><p class="gq">'+esc(c.question)+'</p>'
+     +'<textarea id="canswer" class="gin" style="min-height:80px" maxlength="500" aria-label="Your answer"></textarea>'
+     +'<div class="row"><button class="btn primary" id="cnext">Answer</button><span class="status err" id="cerr"></span></div>';
+  }
+  el.innerHTML=h;
+  var b;
+  if((b=document.getElementById("cstart"))) b.onclick=function(){state.coach={history:[],question:"",busy:false}; coachAsk();};
+  if((b=document.getElementById("cretry"))) b.onclick=function(){state.coach.err=""; coachAsk();};
+  if((b=document.getElementById("cnext"))) b.onclick=function(){
+    var a=document.getElementById("canswer").value.trim();
+    if(!a){document.getElementById("cerr").textContent="Write a few words first.";return;}
+    state.coach.history.push({q:state.coach.question,a:a}); coachAsk();
+  };
+  if((b=document.getElementById("cuse"))) b.onclick=function(){
+    state.data.leverage[0].first_step=state.coach.result.better_step; state.ownLoop.action=state.coach.result.better_step;
+    state.coach.used=true; render();
+  };
+  var ta=document.getElementById("canswer"); if(ta) ta.focus();
+}
+async function coachAsk(){
+  var c=state.coach; c.busy=true; c.err=""; paintCoach();
+  try{
+    var r=await fetch(LF_API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mode:"coach",loop:state.ownLoop,history:c.history})});
+    var d=null; try{d=await r.json();}catch(e){}
+    c.busy=false;
+    if(!r.ok||!d){ if(c.history.length&&!(d&&d.error==="limit")) c.history.pop(); c.err=MSG[(d&&d.error)||"garbled"]||"Something went wrong. Try again."; paintCoach(); return; }
+    if(d.done){c.result={summary:d.summary||"",better_step:d.better_step||""};}
+    else{c.question=d.question;}
+  }catch(e){ c.busy=false; if(c.history.length) c.history.pop(); c.err="Couldn't reach the coach. Check your internet and try again."; }
+  paintCoach();
+  var el=document.getElementById("coach"); if(el) el.scrollIntoView({behavior:"smooth",block:"start"});
 }
 
 document.getElementById("stop").onclick=function(){if(state.ctl)state.ctl.abort();};
