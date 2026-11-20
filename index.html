@@ -209,23 +209,12 @@ function render(){
   document.getElementById("v-detail").onclick=function(){state.view="detail";render();};
 }
 
-function prompt(text){
-  return 'You are a warm, practical systems-thinking coach. A person describes a struggle. Map the feedback loops that keep them stuck, in plain everyday English a 16-year-old understands (short words, no jargon).\n\n'
-  +'Reply with ONLY one JSON object, exactly this shape:\n'
-  +'{"title": "their situation, max 6 words",\n "one_liner": "one sentence: the core loop in plain words",\n'
-  +' "loops": [{"name": "catchy plain name, max 5 words", "type": "R or B (R = reinforcing, it snowballs; B = balancing, it pushes back or holds them at a limit)", "steps": ["3 to 5 labels, max 3 words each, in cause order; the last step leads back to the first"], "signs": ["+ or - for each link: step 1 to 2, 2 to 3, ..., last back to first. Same count as steps. + means they move the same way, - means opposite"], "story": "2 short sentences"}],\n'
-  +' "pattern": {"name": "the systems archetype, e.g. Fixes that Fail, Shifting the Burden, Limits to Growth, Success to the Successful, Escalation, Eroding Goals, Tragedy of the Commons, or None clear", "plain": "one sentence on what it means for them"},\n'
-  +' "leverage": [{"where": "the step or link to push on", "move": "what to change, one sentence", "first_step": "one concrete action they can take this week", "strength": "small, medium or deep"}],\n'
-  +' "questions": ["3 short questions that would sharpen the map"],\n'
-  +' "facts_to_check": ["0 to 3 facts that depend on their country, rules or current prices, which they should verify locally"],\n'
-  +' "care_note": "empty string, or one gentle sentence suggesting they talk to someone they trust or a helpline if their words suggest distress or danger"}\n\n'
-  +'Give 2 or 3 loops, the main one first. Give exactly 3 leverage points, strongest first. Keep advice general: no specific financial products, investments, medical or legal instructions.\n\n'
-  +'The person wrote:\n"""\n'+text.slice(0,3000)+'\n"""';
-}
 function valid(d){return d&&typeof d==="object"&&Array.isArray(d.loops)&&d.loops.length&&d.loops.every(function(l){return Array.isArray(l.steps)&&l.steps.length>=2;});}
 
-var sampleFn=null;
-var ERR={not_granted:"Claude wasn't allowed for this page, so only the example map is available.",sampling_disabled:"Claude isn't available on this account.",rate_limited:"Too many maps in a short time. Try again in a minute.",refused:"Claude couldn't map that. Try describing it differently.",invalid_json:"The map came back garbled. Press Find my loop again.",session_expired:"Please sign in again, then try."};
+/* Our own server function. Until its address is filled in, the page runs as a preview. */
+var LF_API="https://lnncgltiksomeffbddkr.supabase.co/functions/v1/loop-finder";
+var LIVE=LF_API.indexOf("YOUR-PROJECT-REF")<0;
+var MSG={limit:"You've made today's maps. Come back tomorrow for more.",busy:"Loop Finder is very busy right now. Please try again later.",refused:"That one couldn't be mapped. Try describing it differently.",too_long:"That's a lot to map at once. Please shorten it a little.",garbled:"The map came back muddled. Press Find my loop to try again."};
 function setBusy(b,msg,err){
   document.getElementById("go").disabled=b; document.getElementById("stop").hidden=!b;
   var s=document.getElementById("status"); s.className="status"+(err?" err":""); s.innerHTML=msg||"";
@@ -233,25 +222,25 @@ function setBusy(b,msg,err){
 document.getElementById("go").onclick=async function(){
   var text=document.getElementById("ask").value.trim();
   if(!text){document.getElementById("ask").focus();setBusy(false,"Type what you're struggling with first.",true);return;}
-  if(!sampleFn){setBusy(false,"Live maps are coming soon. For now, explore the example map below.",true);document.getElementById("result").scrollIntoView({behavior:"smooth",block:"start"});return;}
+  if(!LIVE){setBusy(false,"Live maps are coming soon. For now, explore the example map below.",true);document.getElementById("result").scrollIntoView({behavior:"smooth",block:"start"});return;}
   state.ctl=new AbortController();
-  setBusy(true,'<span class="spin">◌</span> Finding the loops… this takes about 20–40 seconds.');
+  setBusy(true,'<span class="spin">◌</span> Finding the loops… this takes about 20–60 seconds.');
   try{
-    var d=await sampleFn.json(prompt(text),{signal:state.ctl.signal,cache:false});
-    if(!valid(d)) throw {code:"invalid_json"};
+    var r=await fetch(LF_API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text:text}),signal:state.ctl.signal});
+    var d=null; try{d=await r.json();}catch(e){}
+    if(!r.ok||!valid(d)){var code=(d&&d.error)||"garbled"; setBusy(false,MSG[code]||"Something went wrong. Press Find my loop to try again.",true); return;}
     state.data=d; state.isSample=false; state.view="simple"; setBusy(false,"");
     render(); document.getElementById("result").scrollIntoView({behavior:"smooth",block:"start"});
   }catch(e){
-    if(e&&e.code==="cancelled"){setBusy(false,"Stopped.");return;}
-    setBusy(false,(e&&ERR[e.code])||"Something went wrong reaching Claude. Press Find my loop to try again.",true);
-    if(e&&(e.code==="not_granted"||e.code==="sampling_disabled")) sampleFn=null;
+    if(e&&e.name==="AbortError"){setBusy(false,"Stopped.");return;}
+    setBusy(false,"Couldn't reach Loop Finder. Check your internet and try again.",true);
   }
 };
 document.getElementById("stop").onclick=function(){if(state.ctl)state.ctl.abort();};
 document.getElementById("examples").innerHTML=EXAMPLES.map(function(x,i){var short=TOPICS[i][0];return '<button class="chip" data-ex="'+i+'">'+short+'</button>';}).join("");
 document.getElementById("examples").onclick=function(e){var b=e.target.closest("[data-ex]");if(!b)return;var t=document.getElementById("ask");t.value=EXAMPLES[+b.dataset.ex];t.focus();};
 render();
-(async function(){try{if(window.claude&&claude.use){sampleFn=await claude.use("sample");}}catch(e){sampleFn=null;}})();
+
 </script>
 
 </body>
