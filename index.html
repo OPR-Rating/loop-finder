@@ -257,6 +257,7 @@ function render(){
   if(!d){el.innerHTML="";return;}
   el.innerHTML='<div class="wrap" style="max-width:none">'
    +(state.isSample?'<div class="examplebar">Example map, made in advance. Type your own struggle above to make yours.</div>':'')
+   +(state.sharpened?'<div class="ownbar">Sharpened from your answers'+(state.sharpened>1?' (round '+state.sharpened+')':'')+'. New, deeper questions are under \u201cKeep going\u201d.</div>':'')
    +(state.isOwn?'<div class="ownbar">Your own map, built from your answers'+(state.coach?'.':'. Nothing has been sent anywhere.')+(mindCount(state.mind)?' Your mind map is in Detailed.':'')+'</div>':'')
    +'<div class="row" style="justify-content:space-between"><h2>'+esc(d.title)+'</h2>'
    +'<div class="seg" role="group" aria-label="How much detail"><button id="v-simple" aria-pressed="'+(state.view==="simple")+'">Simple</button><button id="v-detail" aria-pressed="'+(state.view==="detail")+'">Detailed</button></div></div>'
@@ -290,7 +291,7 @@ document.getElementById("go").onclick=async function(){
     var r=await fetch(LF_API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text:text}),signal:state.ctl.signal});
     var d=null; try{d=await r.json();}catch(e){}
     if(!r.ok||!valid(d)){var code=(d&&d.error)||"garbled"; setBusy(false,MSG[code]||"Something went wrong. Press Find my loop to try again.",true); return;}
-    state.data=d; state.isSample=false; state.isOwn=false; state.coach=null; state.mind=null; state.dots=null; state.ownLoop=null; state.savedId=null; state.answers={}; state.ci={}; state.view="simple"; setBusy(false,"");
+    state.data=d; state.isSample=false; state.askText=text; state.qaHist=[]; state.sharpened=0; state.isOwn=false; state.coach=null; state.mind=null; state.dots=null; state.ownLoop=null; state.savedId=null; state.answers={}; state.ci={}; state.view="simple"; setBusy(false,"");
     render(); document.getElementById("result").scrollIntoView({behavior:"smooth",block:"start"});
   }catch(e){
     if(e&&e.name==="AbortError"){setBusy(false,"Stopped.");return;}
@@ -405,7 +406,7 @@ function finishGuide(){
   };
   state.mind=G.mind; state.dots=G.dot?G.dotsGraph:null;
   state.ownLoop={struggle:((G.mind&&G.mind.center)||G.struggle||A.a)+mindSummary(G.mind),steps:steps,type:type,pattern:pat.name,lever:A.lev,action:A.act,confidence:A.conf};
-  state.coach=null; state.savedId=null; state.answers={}; state.ci={};
+  state.coach=null; state.savedId=null; state.answers={}; state.ci={}; state.qaHist=[]; state.sharpened=0; state.askText="";
   state.isSample=false; state.isOwn=true; state.view="simple";
   document.getElementById("guide").hidden=true; render();
   document.getElementById("result").scrollIntoView({behavior:"smooth",block:"start"});
@@ -612,7 +613,7 @@ function drawMyLoops(){
 }
 function openLoop(id,toCheckin){
   var it=loadLoops().filter(function(x){return x.id===id;})[0]; if(!it) return;
-  state.data=it.data; state.mind=it.mind||null; state.dots=it.dots||null; state.ownLoop=it.ownLoop||null; state.isOwn=!!it.isOwn;
+  state.data=it.data; state.mind=it.mind||null; state.askText=it.askText||""; state.qaHist=it.qaHist||[]; state.sharpened=it.sharpened||0; state.dots=it.dots||null; state.ownLoop=it.ownLoop||null; state.isOwn=!!it.isOwn;
   state.isSample=false; state.answers=it.answers||{}; state.savedId=id; state.coach=null; state.ci={}; state.view="simple";
   document.getElementById("guide").hidden=true; render();
   var t=document.getElementById(toCheckin?"checkin":"result"); if(t) t.scrollIntoView({behavior:"smooth",block:"start"});
@@ -630,8 +631,12 @@ function paintKeep(){
   var d=state.data, ans=state.answers||{}, it=curSaved(); state.ci=state.ci||{};
   var h='<span class="eyebrow">Keep going</span><h3>Questions to sharpen your map</h3>'
    +(d.questions||[]).map(function(q,i){return '<label class="qa"><span>'+esc(q)+'</span><textarea class="gin" data-qa="'+i+'" maxlength="500" placeholder="Your answer">'+esc(ans[i]||"")+'</textarea></label>';}).join("");
+  if(LIVE&&(d.questions||[]).length){
+    h+='<div class="row"><button class="btn primary" id="ksharpen">Sharpen my map</button><span class="status" id="shmsg" aria-live="polite"></span></div>'
+      +'<p class="first">Uses your answers to redraw your map more precisely, then asks deeper questions. Answer as many rounds as you like.</p>';
+  }
   if(!it){
-    h+='<div class="row"><button class="btn primary" id="ksave">Save my loop</button><span class="status" id="kmsg"></span></div>'
+    h+='<div class="row"><button class="btn'+(LIVE&&(d.questions||[]).length?'':' primary')+'" id="ksave">Save my loop</button><span class="status" id="kmsg"></span></div>'
       +'<p class="first">Saved on this phone only. Nobody else can see it, and it stays until you delete it or clear your browser.</p>';
   }else{
     h+='<div class="ownbar">Saved in My loops, on this phone only. Your answers save as you type.</div>'
@@ -654,10 +659,11 @@ function paintKeep(){
     updateSaved(function(x){x.answers=state.answers;});
   };});
   var b;
+  if((b=document.getElementById("ksharpen"))) b.onclick=sharpenMap;
   if((b=document.getElementById("ksave"))) b.onclick=function(){
     ensureOwnLoop();
     var id=Date.now().toString(36);
-    var a=loadLoops(); a.push({id:id,created:new Date().toISOString(),title:d.title,data:d,mind:state.mind||null,dots:state.dots||null,ownLoop:state.ownLoop,isOwn:!!state.isOwn,answers:state.answers||{},checkins:[],coachNotes:[]});
+    var a=loadLoops(); a.push({id:id,created:new Date().toISOString(),title:d.title,data:d,askText:state.askText||"",qaHist:state.qaHist||[],sharpened:state.sharpened||0,mind:state.mind||null,dots:state.dots||null,ownLoop:state.ownLoop,isOwn:!!state.isOwn,answers:state.answers||{},checkins:[],coachNotes:[]});
     if(!storeLoops(a)){document.getElementById("kmsg").textContent="Couldn't save on this phone. Private browsing may be on.";return;}
     state.savedId=id; drawMyLoops(); render();
     var k=document.getElementById("keep"); if(k) k.scrollIntoView({behavior:"smooth",block:"start"});
@@ -943,6 +949,28 @@ function wireDots(){
     paintDots();
   };
   svg.onpointerup=end; svg.onpointercancel=end;
+}
+
+
+/* ---------- Sharpen my map: redraw it from the person's answers ---------- */
+async function sharpenMap(){
+  var ans=state.answers||{}, qs=state.data.questions||[], msg=document.getElementById("shmsg"), btn=document.getElementById("ksharpen");
+  var round=qs.map(function(q,i){return {q:q,a:String(ans[i]||"").trim()};}).filter(function(x){return x.a;});
+  if(!round.length){msg.className="status err"; msg.textContent="Answer at least one question first."; return;}
+  if(!agreedOk()) return;
+  var qa=(state.qaHist||[]).concat(round);
+  var text=state.askText||(state.ownLoop&&state.ownLoop.struggle)||(state.data.title+": "+(state.data.one_liner||""));
+  btn.disabled=true; msg.className="status"; msg.innerHTML='<span class="spin">◌</span> Sharpening your map… about 20–60 seconds.';
+  try{
+    var r=await fetch(LF_API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mode:"sharpen",text:text,map:state.data,qa:qa})});
+    var d=null; try{d=await r.json();}catch(e){}
+    if(!r.ok||!valid(d)){btn.disabled=false; msg.className="status err"; msg.textContent=MSG[(d&&d.error)||"garbled"]||"Something went wrong. Try again."; return;}
+    state.qaHist=qa; state.data=d; state.answers={}; state.sharpened=(state.sharpened||0)+1; state.coach=null;
+    state.askText=text; state.ownLoop=null; ensureOwnLoop();
+    updateSaved(function(x){x.data=state.data; x.title=state.data.title; x.answers={}; x.qaHist=qa; x.askText=text; x.sharpened=state.sharpened; x.ownLoop=state.ownLoop;});
+    state.view="simple"; render();
+    document.getElementById("result").scrollIntoView({behavior:"smooth",block:"start"});
+  }catch(e){btn.disabled=false; msg.className="status err"; msg.textContent="Couldn't reach Loop Finder. Check your internet and try again.";}
 }
 
 document.getElementById("stop").onclick=function(){if(state.ctl)state.ctl.abort();};
