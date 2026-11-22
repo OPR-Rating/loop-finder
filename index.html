@@ -110,6 +110,19 @@ ul.plain{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
 .dsvg{width:100%;max-width:520px;height:auto;display:block;margin:0 auto;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 .dtools{display:flex;flex-direction:column;gap:8px}
 .zoomrow .btn{padding:8px 14px;min-width:44px}
+.modes{display:grid;grid-template-columns:repeat(3,1fr);border-radius:14px;align-self:stretch}
+.modes button{border-radius:10px;padding:8px 6px;font-size:13px;line-height:1.2}
+.grow{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+.grow span{text-align:center;font-size:12px;padding:6px 2px;border-radius:8px;background:var(--bg);color:var(--muted);font-weight:600;line-height:1.2}
+.grow span.on{background:var(--accent);color:#fff}
+.grow span.done{background:var(--accent-soft);color:var(--accent)}
+.pstate{font-family:var(--display);font-size:22px;line-height:1.3}
+.meter{height:10px;background:var(--bg);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.meter span{display:block;height:100%;background:var(--accent)}
+.ptable{width:100%;border-collapse:collapse;font-size:14px}
+.ptable th{text-align:left;font-size:12px;color:var(--muted);font-weight:600;padding:6px 8px;border-bottom:1px solid var(--line)}
+.ptable td{padding:8px;border-bottom:1px solid var(--line);vertical-align:top}
+.ptable tr.on td{background:var(--accent-soft)}
 .ownbar{font-size:13px;color:var(--accent);background:var(--accent-soft);border-radius:10px;padding:8px 12px}
 @media (prefers-reduced-motion:no-preference){.spin{animation:sp 1.2s linear infinite;display:inline-block}@keyframes sp{to{transform:rotate(360deg)}}}
 </style>
@@ -133,7 +146,7 @@ ul.plain{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
   <section class="card" id="myloops" hidden></section>
 
   <section class="card" aria-labelledby="askh">
-    <div class="seg" role="group" aria-label="How do you want to work?"><button id="m-ai" aria-pressed="true">Map it for me</button><button id="m-self" aria-pressed="false">Think it through myself</button></div>
+    <div class="seg modes" role="group" aria-label="How do you want to work?"><button id="m-ai" aria-pressed="true">Map it for me</button><button id="m-self" aria-pressed="false">Think it through myself</button><button id="m-purpose" aria-pressed="false">Find my purpose</button></div>
     <p class="first" id="modeline">The app reads what you write and draws your loop in about a minute.</p>
     <label class="eyebrow" id="askh" for="ask">What are you struggling with?</label>
     <p class="first" style="margin-top:-4px">Anything at all: money, school, work, family, health, sport, confidence. Write it the way you'd tell a friend.</p>
@@ -235,6 +248,7 @@ function ring(loop,opts){
 }
 
 function simpleView(d){
+  if(d.purpose) return purposeView(d,false);
   var L=d.loops[0], lv=d.leverage&&d.leverage[0];
   return '<div class="card simple"><span class="eyebrow" style="font-family:var(--body)">The simple picture</span><h2>'+esc(L.name)+'</h2>'
    +'<div class="ringwrap">'+ring(L,{hand:true})+'</div>'
@@ -243,6 +257,7 @@ function simpleView(d){
    +'</div>';
 }
 function detailedView(d){
+  if(d.purpose) return purposeView(d,true);
   return mindCard()+dotsCard()+'<div class="card"><span class="eyebrow">All the loops</span><p>'+esc(d.one_liner)+'</p><div class="loops">'
    +d.loops.map(function(L){return '<div class="card" style="padding:14px"><div class="row"><h3>'+esc(L.name)+'</h3><span class="tag '+(L.type==="B"?"B":"R")+'">'+(L.type==="B"?"Balancing: holds you back":"Reinforcing: snowballs")+'</span></div><div class="ringwrap">'+ring(L)+'</div><p class="first">'+esc(L.story)+'</p></div>';}).join('')
    +'</div><p class="first"><b>+</b> means both move the same way (more leads to more). <b>−</b> means they move opposite ways (more leads to less).</p></div>'
@@ -265,6 +280,7 @@ function render(){
    +(state.view==="simple"?simpleView(d):detailedView(d))+'</div>';
   document.getElementById("v-simple").onclick=function(){state.view="simple";render();};
   document.getElementById("v-detail").onclick=function(){state.view="detail";render();};
+  drawEvolve();
   drawKeep();
   drawCoachSlot();
 }
@@ -282,6 +298,7 @@ function setBusy(b,msg,err){
 document.getElementById("go").onclick=async function(){
   var text=document.getElementById("ask").value.trim();
   if(!agreedOk()) return;
+  if(state.mode==="purpose"){startPurpose(text,null);return;}
   if(state.mode==="self"){startGuide(text);return;}
   if(!text){document.getElementById("ask").focus();setBusy(false,"Type what you're struggling with first.",true);return;}
   if(!LIVE){setBusy(false,"Live maps are coming soon. For now, explore the example map below.",true);document.getElementById("result").scrollIntoView({behavior:"smooth",block:"start"});return;}
@@ -313,17 +330,19 @@ function agreedOk(){
 /* ---------- Mode switch ---------- */
 function setMode(m){
   state.mode=m;
-  document.getElementById("m-ai").setAttribute("aria-pressed",m==="ai");
-  document.getElementById("m-self").setAttribute("aria-pressed",m==="self");
-  document.getElementById("go").textContent=m==="ai"?"Find my loop":"Start thinking it through";
+  ["ai","self","purpose"].forEach(function(k){document.getElementById("m-"+k).setAttribute("aria-pressed",m===k);});
+  document.getElementById("go").textContent=m==="ai"?"Find my loop":m==="self"?"Start thinking it through":"Find my purpose";
   document.getElementById("modeline").textContent=m==="ai"
     ?"The app reads what you write and draws your loop in about a minute."
-    :"Answer a few short questions, like a coach would ask. You build the loop yourself, and nothing leaves your phone.";
+    :m==="self"?"Answer a few short questions, like a coach would ask. You build the loop yourself, and nothing leaves your phone."
+    :"A GROW coaching session about your work: Goal, Reality, Options, Way forward. You use the same mind map and loop drawing, and nothing leaves your phone.";
+  document.getElementById("askh").textContent=m==="purpose"?"What\u2019s on your mind about your work? (optional)":"What are you struggling with?";
   setBusy(false,"");
   if(m==="ai") document.getElementById("guide").hidden=true;
 }
 document.getElementById("m-ai").onclick=function(){setMode("ai");};
 document.getElementById("m-self").onclick=function(){setMode("self");};
+document.getElementById("m-purpose").onclick=function(){setMode("purpose");};
 
 /* ---------- Think it through myself: a short coaching conversation ---------- */
 var PATTERNS=[
@@ -354,6 +373,7 @@ var QS=[
 ];
 function stepsNow(){if(G.dot) return G.dot.steps.slice(); return ["a","b","c","d"].map(function(k){return (G.ans[k]||"").trim();}).filter(Boolean);}
 function startGuide(text){
+  FLOW="think";
   G={i:0,ans:{},struggle:text,stage:"mind",mind:mindEmpty()}; G.mind.center=cut(text,60); drawMind();
   var g=document.getElementById("guide"); g.hidden=false; g.scrollIntoView({behavior:"smooth",block:"start"});
 }
@@ -493,20 +513,20 @@ async function coachAsk(finish){
 
 
 /* ---------- Unpack it: a mind map before the loop ---------- */
-var BRANCHES=[
+var BR_THINK=[
  {k:"causes", label:"Causes", hint:"What feeds this? E.g. “Rent went up”, “No budget”", col:"var(--r)", x:300, y:16},
  {k:"feelings", label:"Feelings", hint:"How does it make you feel? E.g. “Stressed”, “Ashamed”", col:"var(--b)", x:500, y:118},
  {k:"people", label:"People involved", hint:"Who is part of it? E.g. “My partner”, “My boss”", col:"var(--accent)", x:440, y:300},
  {k:"tried", label:"What I've tried", hint:"What have you already done? E.g. “A spending app”", col:"var(--note)", x:160, y:300},
  {k:"help", label:"What would help", hint:"What could make a difference? E.g. “A savings plan”", col:"var(--violet)", x:100, y:118}
 ];
-function mindEmpty(){var m={center:""}; BRANCHES.forEach(function(b){m[b.k]=[];}); return m;}
-function mindCount(m){return m?BRANCHES.reduce(function(n,b){return n+(m[b.k]||[]).length;},0):0;}
+function mindEmpty(set){var m={center:"",_set:set||"think"}; brOf(m).forEach(function(b){m[b.k]=[];}); return m;}
+function mindCount(m){return m?brOf(m).reduce(function(n,b){return n+(m[b.k]||[]).length;},0):0;}
 function cut(t,n){t=String(t); return t.length>n?t.slice(0,n-1)+"…":t;}
 function mindSvg(m){
   var W=600,H=430,cx=300,cy=228,bw=168;
   var out='<svg class="mindsvg" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Mind map of '+esc(m.center||"my struggle")+'">';
-  var boxes=BRANCHES.map(function(b){
+  var boxes=brOf(m).map(function(b){
     var items=m[b.k]||[], shown=items.slice(0,3), more=items.length-shown.length;
     var lines=shown.map(function(t){return cut(t,22);}); if(more>0) lines.push("+"+more+" more");
     var h=34+(lines.length?lines.length*18+4:0);
@@ -530,20 +550,20 @@ function mindCard(){
 }
 function drawMind(){
   var m=G.mind, g=document.getElementById("guide");
-  var rows=BRANCHES.map(function(b){
+  var rows=brOf(m).map(function(b){
     var chips=(m[b.k]||[]).map(function(t,i){return '<button class="mchip" data-b="'+b.k+'" data-i="'+i+'" aria-label="Remove '+esc(t)+'">'+esc(t)+' <span aria-hidden="true">×</span></button>';}).join("");
     return '<div class="mbranch"><div class="mhead"><span class="mdot" style="background:'+b.col+'"></span>'+esc(b.label)+'</div>'
       +'<p class="first">'+esc(b.hint)+'</p>'+(chips?'<div class="mchips">'+chips+'</div>':'')
       +((m[b.k]||[]).length<6?'<div class="madd"><input class="gin" id="mi-'+b.k+'" maxlength="40" placeholder="Add an idea" aria-label="Add to '+esc(b.label)+'" autocomplete="off"><button class="btn" data-add="'+b.k+'">Add</button></div>':'')+'</div>';
   }).join("");
-  g.innerHTML='<span class="eyebrow">Step 1 of 3 · Unpack it</span>'
+  g.innerHTML=(FLOW==="purpose"?growBar("r")+'<span class="eyebrow">Reality \u00b7 your work today</span>':'<span class="eyebrow">Step 1 of 3 · Unpack it</span>')
     +'<p class="gq">First, get it all out. Add a few words to any branch.</p>'
     +'<p class="first">There are no wrong answers. Add what comes to mind, and skip any branch that doesn’t fit.</p>'
-    +'<label class="eyebrow" for="mcenter">In the middle: your struggle</label>'
+    +'<label class="eyebrow" for="mcenter">'+(FLOW==="purpose"?'In the middle: your work today':'In the middle: your struggle')+'</label>'
     +'<input class="gin" id="mcenter" maxlength="60" value="'+esc(m.center)+'" autocomplete="off">'
     +'<div class="ringwrap">'+mindSvg(m)+'</div>'+rows
-    +'<div class="row"><button class="btn primary" id="mnext">Next: connect the dots</button><button class="btn" id="mskip">Quick questions instead</button></div>'
-    +'<p class="first">Connect the dots: you draw what causes what and find your own loops. Quick questions: a few short questions build one loop for you.</p>';
+    +'<div class="row"><button class="btn primary" id="mnext">Next: connect the dots</button><button class="btn" id="mskip">'+(FLOW==="purpose"?'Skip drawing':'Quick questions instead')+'</button></div>'
+    +(FLOW==="purpose"?'<p class="first">Connect the dots: draw what keeps you where you are, and find the loop.</p>':'<p class="first">Connect the dots: you draw what causes what and find your own loops. Quick questions: a few short questions build one loop for you.</p>');
   document.getElementById("mcenter").onchange=function(){m.center=this.value.trim(); drawMind();};
   Array.prototype.forEach.call(g.querySelectorAll("[data-add]"),function(btn){
     var k=btn.dataset.add, inp=document.getElementById("mi-"+k);
@@ -552,12 +572,12 @@ function drawMind(){
   });
   Array.prototype.forEach.call(g.querySelectorAll(".mchip"),function(c){c.onclick=function(){m[c.dataset.b].splice(+c.dataset.i,1); drawMind();};});
   document.getElementById("mnext").onclick=function(){m.center=document.getElementById("mcenter").value.trim(); startDots();};
-  document.getElementById("mskip").onclick=function(){m.center=document.getElementById("mcenter").value.trim(); G.dot=null; G.stage="q"; G.i=0; drawGuide(); document.getElementById("guide").scrollIntoView({behavior:"smooth",block:"start"});};
+  document.getElementById("mskip").onclick=function(){if(FLOW==="purpose"){m.center=document.getElementById("mcenter").value.trim(); purposeAfterLoop(); return;} m.center=document.getElementById("mcenter").value.trim(); G.dot=null; G.stage="q"; G.i=0; drawGuide(); document.getElementById("guide").scrollIntoView({behavior:"smooth",block:"start"});};
 }
-function mindItems(){var m=G.mind, all=[]; BRANCHES.forEach(function(b){(m[b.k]||[]).forEach(function(t){if(all.indexOf(t)<0) all.push(t);});}); return all;}
+function mindItems(){var m=G.mind, all=[]; brOf(m).forEach(function(b){(m[b.k]||[]).forEach(function(t){if(all.indexOf(t)<0) all.push(t);});}); return all;}
 function mindSummary(m){
   if(!m||!mindCount(m)) return "";
-  return " | Their mind map: "+BRANCHES.filter(function(b){return (m[b.k]||[]).length;}).map(function(b){return b.label+": "+m[b.k].join(", ");}).join("; ");
+  return " | Their mind map: "+brOf(m).filter(function(b){return (m[b.k]||[]).length;}).map(function(b){return b.label+": "+m[b.k].join(", ");}).join("; ");
 }
 
 
@@ -572,7 +592,7 @@ function updateSaved(fn){
   if(!it) return false; fn(it); var ok=storeLoops(a); drawMyLoops(); return ok;
 }
 function ensureOwnLoop(){
-  if(state.ownLoop||!state.data||!state.data.loops) return;
+  if(state.ownLoop||!state.data||!state.data.loops||!state.data.loops.length) return;
   var d=state.data, L=d.loops[0], lv=(d.leverage||[])[0]||{};
   state.ownLoop={struggle:d.title+": "+(d.one_liner||""),steps:L.steps,type:L.type,pattern:(d.pattern||{}).name||"",lever:lv.where||"",action:lv.first_step||"",confidence:""};
 }
@@ -631,12 +651,12 @@ function paintKeep(){
   var d=state.data, ans=state.answers||{}, it=curSaved(); state.ci=state.ci||{};
   var h='<span class="eyebrow">Keep going</span><h3>Questions to sharpen your map</h3>'
    +(d.questions||[]).map(function(q,i){return '<label class="qa"><span>'+esc(q)+'</span><textarea class="gin" data-qa="'+i+'" maxlength="500" placeholder="Your answer">'+esc(ans[i]||"")+'</textarea></label>';}).join("");
-  if(LIVE&&(d.questions||[]).length){
+  if(LIVE&&(d.questions||[]).length&&(d.loops||[]).length&&!d.purpose){
     h+='<div class="row"><button class="btn primary" id="ksharpen">Sharpen my map</button><span class="status" id="shmsg" aria-live="polite"></span></div>'
       +'<p class="first">Uses your answers to redraw your map more precisely, then asks deeper questions. Answer as many rounds as you like.</p>';
   }
   if(!it){
-    h+='<div class="row"><button class="btn'+(LIVE&&(d.questions||[]).length?'':' primary')+'" id="ksave">Save my loop</button><span class="status" id="kmsg"></span></div>'
+    h+='<div class="row"><button class="btn'+(LIVE&&(d.questions||[]).length&&(d.loops||[]).length&&!d.purpose?'':' primary')+'" id="ksave">Save my loop</button><span class="status" id="kmsg"></span></div>'
       +'<p class="first">Saved on this phone only. Nobody else can see it, and it stays until you delete it or clear your browser.</p>';
   }else{
     h+='<div class="ownbar">Saved in My loops, on this phone only. Your answers save as you type.</div>'
@@ -790,7 +810,7 @@ function dotsCard(){
 }
 function drawDots(){
   var g=document.getElementById("guide");
-  g.innerHTML='<span class="eyebrow">Step 2 of 3 · Connect the dots</span>'
+  g.innerHTML=(FLOW==="purpose"?growBar("r")+'<span class="eyebrow">Reality \u00b7 what keeps you here?</span>':'<span class="eyebrow">Step 2 of 3 · Connect the dots</span>')
    +'<p class="gq">What causes what? Draw arrows between your ideas.</p>'
    +'<p class="first" id="dhint"></p>'
    +'<div class="seg" role="group" aria-label="What your finger does"><button id="dm-draw">Draw arrows</button><button id="dm-move">Move things</button></div>'
@@ -800,7 +820,7 @@ function drawDots(){
    +'<div class="dtools" id="dtools"></div>'
    +'<div class="madd"><input class="gin" id="dadd" maxlength="30" placeholder="Add something else" aria-label="Add something to the map" autocomplete="off"><button class="btn" id="daddb">Add</button></div>'
    +'<div id="dloops" class="dtools"></div>'
-   +'<div class="row"><button class="btn" id="dback">Back to mind map</button><button class="btn" id="dquick">Quick questions instead</button></div>';
+   +'<div class="row"><button class="btn" id="dback">Back to mind map</button><button class="btn" id="dquick">'+(FLOW==="purpose"?'Skip drawing':'Quick questions instead')+'</button></div>';
   document.getElementById("dm-draw").onclick=function(){D.mode="draw"; D.sel=null; D.pending=null; paintDots();};
   document.getElementById("dz-in").onclick=function(){zoomBy(1/1.25); viewApply(document.getElementById("dsvg"));};
   document.getElementById("dz-out").onclick=function(){zoomBy(1.25); viewApply(document.getElementById("dsvg"));};
@@ -812,7 +832,7 @@ function drawDots(){
   document.getElementById("daddb").onclick=addIt;
   document.getElementById("dadd").onkeydown=function(e){if(e.key==="Enter"){e.preventDefault(); addIt();}};
   document.getElementById("dback").onclick=function(){G.stage="mind"; drawMind();};
-  document.getElementById("dquick").onclick=function(){G.dot=null; G.stage="q"; G.i=0; drawGuide(); document.getElementById("guide").scrollIntoView({behavior:"smooth",block:"start"});};
+  document.getElementById("dquick").onclick=function(){if(FLOW==="purpose"){purposeAfterLoop(); return;} G.dot=null; G.stage="q"; G.i=0; drawGuide(); document.getElementById("guide").scrollIntoView({behavior:"smooth",block:"start"});};
   paintDots();
 }
 function paintDots(){
@@ -848,6 +868,7 @@ function paintDots(){
     var c=cyc[D.hi];
     G.dot={steps:c.steps.map(function(x){return cut(x,40);}),signs:c.signs,type:c.type};
     G.dotsGraph=JSON.parse(JSON.stringify({nodes:D.nodes,edges:D.edges,hiIds:c.ids}));
+    if(FLOW==="purpose"){purposeAfterLoop(); return;}
     G.stage="q"; G.i=qIndex("pat"); drawGuide(); document.getElementById("guide").scrollIntoView({behavior:"smooth",block:"start"});
   };
   wireDots();
@@ -971,6 +992,207 @@ async function sharpenMap(){
     state.view="simple"; render();
     document.getElementById("result").scrollIntoView({behavior:"smooth",block:"start"});
   }catch(e){btn.disabled=false; msg.className="status err"; msg.textContent="Couldn't reach Loop Finder. Check your internet and try again.";}
+}
+
+
+/* ---------- Find my purpose: a GROW session (Goal, Reality, Options, Way forward) using the same mind map and loops ---------- */
+var FLOW="think", P=null;
+var VALUES=["Freedom","Security","Helping people","Creating","Learning","Leading","Recognition","Family time","Adventure","Making money","Fairness","Calm"];
+var BR_WORK=[
+ {k:"energy", label:"Gives me energy", hint:"What parts of work light you up? E.g. “Solving problems”, “Teaching”", col:"var(--accent)", x:300, y:16},
+ {k:"drain", label:"Drains me", hint:"What wears you down? E.g. “Long meetings”, “The commute”", col:"var(--r)", x:500, y:118},
+ {k:"people", label:"People", hint:"Who shapes your work? E.g. “My manager”, “Clients”", col:"var(--b)", x:440, y:300},
+ {k:"money", label:"Money and needs", hint:"What do you need from work? E.g. “Pay the bond”, “Medical aid”", col:"var(--note)", x:160, y:300},
+ {k:"holds", label:"What holds me here", hint:"Why haven’t you changed yet? E.g. “Fear of starting over”", col:"var(--violet)", x:100, y:118}
+];
+var LVL=["","Low","Medium","High"];
+function brOf(m){return m&&m._set==="work"?BR_WORK:BR_THINK;}
+function lowerFirst(t){t=String(t||"").trim(); return t?t.charAt(0).toLowerCase()+t.slice(1):t;}
+function growBar(k){
+  var st=[["g","Goal"],["r","Reality"],["o","Options"],["w","Way forward"]], i=st.map(function(x){return x[0];}).indexOf(k);
+  return '<div class="grow" aria-label="GROW stage: '+st[i][1]+'">'+st.map(function(x,j){return '<span class="'+(j===i?'on':j<i?'done':'')+'">'+x[0].toUpperCase()+' · '+x[1]+'</span>';}).join("")+'</div>';
+}
+function startPurpose(text,from){
+  FLOW="purpose";
+  P={stage:"g",g:{values:[]},r:{},o:[{t:""},{t:""},{t:""}],w:{},chosen:-1,carried:!!from};
+  G={i:0,ans:{},struggle:text||"",stage:"p",mind:mindEmpty("work"),dots:null,dot:null};
+  G.mind.center="My work today";
+  if(from){G.dot=from.dot; G.dotsGraph=from.graph||null;}
+  var g=document.getElementById("guide"); g.hidden=false; drawPurpose(); g.scrollIntoView({behavior:"smooth",block:"start"});
+}
+function purposeAfterLoop(){FLOW="purpose"; P.stage="r"; drawPurpose(); document.getElementById("guide").scrollIntoView({behavior:"smooth",block:"start"});}
+function pField(k,label,hint,val,store){
+  return '<label class="qa"><span>'+label+'</span><textarea class="gin" data-'+store+'="'+k+'" maxlength="200" placeholder="'+esc(hint)+'">'+esc(val||"")+'</textarea></label>';
+}
+function pChips(name,opts,val){return '<div class="chips">'+opts.map(function(o){return '<button class="chip" data-'+name+'="'+esc(o[0])+'" aria-pressed="'+(String(val)===String(o[0]))+'">'+esc(o[1])+'</button>';}).join("")+'</div>';}
+function draftStatement(){
+  var g=P.g, m=lowerFirst(g.meaning), k=lowerFirst(g.known), v=g.values||[];
+  var vs=v.map(function(x){return x.toLowerCase();}), vl=vs.length>1?vs.slice(0,-1).join(", ")+" and "+vs[vs.length-1]:vs.join("");
+  return "My purpose: "+(m||"work that matters to me")+(k?", using what people already come to me for: "+k:"")+"."+(vl?" What matters most to me is "+vl+".":"");
+}
+function drawPurpose(){
+  var g=document.getElementById("guide"), h="", s=P.stage;
+  if(s==="g"){
+    h=growBar("g")+'<span class="eyebrow">Goal · what do you want from your work?</span>'
+     +'<p class="gq">Start with where you want to go, not where you are.</p>'
+     +pField("meaning","What would meaningful work look like for you in two years?","E.g. “Running my own design studio”, “Leading a team that helps families”",P.g.meaning,"pg")
+     +'<p class="first">Pick up to 3 values that matter most to you at work</p>'
+     +'<div class="chips">'+VALUES.map(function(v){return '<button class="chip" data-val="'+esc(v)+'" aria-pressed="'+(P.g.values.indexOf(v)>=0)+'">'+esc(v)+'</button>';}).join("")+'</div>'
+     +pField("flow","I lose track of time when I…","E.g. “fix a messy spreadsheet”, “teach someone”",P.g.flow,"pg")
+     +pField("known","People come to me for…","E.g. “advice”, “getting things organised”",P.g.known,"pg")
+     +pField("measure","How will you know you’re there?","E.g. “I look forward to Mondays”",P.g.measure,"pg")
+     +'<label class="qa"><span><b>My purpose (draft)</b>: edit it until it sounds like you</span><textarea class="gin" id="p-statement" maxlength="300" placeholder="Tap “Draft it for me”, then make it yours">'+esc(P.g.statement||"")+'</textarea></label>'
+     +'<div class="row"><button class="btn" id="p-draft">Draft it for me</button></div>'
+     +'<div class="row"><button class="btn primary" id="p-next">Next: Reality</button><span class="status err" id="perr"></span></div>';
+  }else if(s==="r"){
+    var sc=P.r.score;
+    h=growBar("r")+'<span class="eyebrow">Reality · where you are now</span>'
+     +(G.dot?'<p class="first">The loop that keeps you where you are:</p><div class="ringwrap">'+ring({name:"",type:G.dot.type,steps:G.dot.steps,signs:G.dot.signs},{hand:true})+'</div>'
+            :'<p class="first">Map your work today to find the loop that keeps you where you are. You can also skip it.</p>')
+     +'<div class="row"><button class="btn" id="p-redraw">'+(G.dot?'Redraw my work map':'Map my work today')+'</button></div>'
+     +'<p class="gq" style="font-size:19px">How close is your work today to your purpose?</p>'
+     +pChips("score",[1,2,3,4,5,6,7,8,9,10].map(function(n){return [n,String(n)];}),sc)
+     +'<p class="first">1 = far away, 10 = I’m living it</p>'
+     +pField("gap","What is the biggest gap between where you are and where you want to be?","E.g. “I never get to use my creative side”",P.r.gap,"pr")
+     +'<div class="row"><button class="btn" id="p-back">Back</button><button class="btn primary" id="p-next">Next: Options</button><span class="status err" id="perr"></span></div>';
+  }else if(s==="o"){
+    var ranked=P.o.map(function(o,i){return {i:i,o:o};}).filter(function(x){return x.o.t&&x.o.fit&&x.o.real;})
+      .sort(function(a,b){return (b.o.fit*2+b.o.real)-(a.o.fit*2+a.o.real);});
+    h=growBar("o")+'<span class="eyebrow">Options · what could you do?</span>'
+     +'<p class="gq">List a few different ways forward. Big or small, they all count.</p>'
+     +P.o.map(function(o,i){
+        return '<div class="mbranch"><input class="gin" data-po="'+i+'" maxlength="120" placeholder="Option '+(i+1)+(i===0?', e.g. “Talk to my manager about a new role”':'')+'" value="'+esc(o.t)+'" autocomplete="off">'
+         +(o.t?'<span class="first">Fits my purpose</span>'+pChips("fit-"+i,[[1,"Low"],[2,"Medium"],[3,"High"]],o.fit)
+              +'<span class="first">Realistic for me now</span>'+pChips("real-"+i,[[1,"Low"],[2,"Medium"],[3,"High"]],o.real):'')+'</div>';
+      }).join("")
+     +(P.o.length<5?'<div class="row"><button class="btn" id="p-addopt">Add another option</button></div>':'')
+     +(ranked.length?'<span class="eyebrow">Best fit first: pick the one you’ll try</span>'+ranked.map(function(x){
+        return '<button class="optbtn" data-pick="'+x.i+'" aria-pressed="'+(P.chosen===x.i)+'">'+esc(x.o.t)+'<small>Fits my purpose: '+LVL[x.o.fit]+' · Realistic: '+LVL[x.o.real]+'</small></button>';}).join(""):'<p class="first">Rate each option to see which fits best.</p>')
+     +(P.chosen>=0&&G.dot?'<p class="first"><b>Systems check:</b> which part of your loop would this change?</p>'
+        +pChips("brk",G.dot.steps.map(function(t){return [t,t];}).concat([["Not sure","Not sure"]]),P.breaks):'')
+     +(P.chosen>=0?pField("side","What else might it affect, good or bad?","E.g. “Less money for 3 months”, “More time with the kids”",P.side,"pside"):'')
+     +'<div class="row"><button class="btn" id="p-back">Back</button><button class="btn primary" id="p-next">Next: Way forward</button><span class="status err" id="perr"></span></div>';
+  }else if(s==="w"){
+    var ch=(P.o[P.chosen]||{}).t||"";
+    h=growBar("w")+'<span class="eyebrow">Way forward · what will you do?</span>'
+     +'<p class="gq">Your choice: '+esc(ch)+'</p>'
+     +pField("step","What is your first step?","Small and specific, e.g. “Email Thandi to ask about the design role”",P.w.step,"pw")
+     +pField("when","When exactly?","E.g. “Tuesday before lunch”",P.w.when,"pw")
+     +pField("obstacle","What might get in the way?","E.g. “I’ll talk myself out of it”",P.w.obstacle,"pw")
+     +pField("plan","What will you do if it does?","E.g. “Tell my wife I’m doing it, so I can’t back out”",P.w.plan,"pw")
+     +pField("support","Who can support you?","E.g. “My sister”, “A mentor”",P.w.support,"pw")
+     +'<p class="first">How committed are you, from 1 to 10?</p>'
+     +pChips("commit",[1,2,3,4,5,6,7,8,9,10].map(function(n){return [n,String(n)];}),P.w.commit)
+     +(P.w.commit&&+P.w.commit<7?'<p class="first">Below 7? Make the step smaller until you’d say 7 or more.</p>':'')
+     +'<div class="row"><button class="btn" id="p-back">Back</button><button class="btn primary" id="p-next">See my purpose map</button><span class="status err" id="perr"></span></div>';
+  }
+  g.innerHTML=h; wirePurpose();
+}
+function wirePurpose(){
+  var g=document.getElementById("guide"), err=function(t){var e=document.getElementById("perr"); if(e) e.textContent=t;};
+  var each=function(sel,fn){Array.prototype.forEach.call(g.querySelectorAll(sel),fn);};
+  each("[data-pg]",function(t){t.oninput=function(){P.g[t.dataset.pg]=t.value;};});
+  each("[data-pr]",function(t){t.oninput=function(){P.r[t.dataset.pr]=t.value;};});
+  each("[data-pw]",function(t){t.oninput=function(){P.w[t.dataset.pw]=t.value;};});
+  each("[data-pside]",function(t){t.oninput=function(){P.side=t.value;};});
+  var st=document.getElementById("p-statement"); if(st) st.oninput=function(){P.g.statement=st.value;};
+  each("[data-val]",function(b){b.onclick=function(){var v=b.dataset.val, i=P.g.values.indexOf(v);
+    if(i>=0) P.g.values.splice(i,1); else if(P.g.values.length<3) P.g.values.push(v); else {err("Pick up to 3. Tap one to remove it first."); return;}
+    drawPurpose();};});
+  each("[data-score]",function(b){b.onclick=function(){P.r.score=+b.dataset.score; drawPurpose();};});
+  each("[data-commit]",function(b){b.onclick=function(){P.w.commit=+b.dataset.commit; drawPurpose();};});
+  each("[data-brk]",function(b){b.onclick=function(){P.breaks=b.dataset.brk; drawPurpose();};});
+  each("[data-po]",function(t){t.oninput=function(){P.o[+t.dataset.po].t=t.value.trim();}; t.onchange=function(){P.o[+t.dataset.po].t=t.value.trim(); drawPurpose();};});
+  P.o.forEach(function(o,i){
+    each('[data-fit-'+i+']',function(b){b.onclick=function(){o.fit=+b.getAttribute('data-fit-'+i); drawPurpose();};});
+    each('[data-real-'+i+']',function(b){b.onclick=function(){o.real=+b.getAttribute('data-real-'+i); drawPurpose();};});
+  });
+  each("[data-pick]",function(b){b.onclick=function(){P.chosen=+b.dataset.pick; drawPurpose();};});
+  var b;
+  if((b=document.getElementById("p-addopt"))) b.onclick=function(){P.o.push({t:""}); drawPurpose();};
+  if((b=document.getElementById("p-draft"))) b.onclick=function(){P.g.statement=draftStatement(); drawPurpose(); var s2=document.getElementById("p-statement"); if(s2) s2.focus();};
+  if((b=document.getElementById("p-redraw"))) b.onclick=function(){drawMind(); document.getElementById("guide").scrollIntoView({behavior:"smooth",block:"start"});};
+  if((b=document.getElementById("p-back"))) b.onclick=function(){P.stage={r:"g",o:"r",w:"o"}[P.stage]; drawPurpose();};
+  if((b=document.getElementById("p-next"))) b.onclick=function(){
+    if(P.stage==="g"){
+      if(!String(P.g.meaning||"").trim()){err("Write what meaningful work would look like first."); return;}
+      if(!String(P.g.statement||"").trim()) P.g.statement=draftStatement();
+      P.stage="r"; drawPurpose();
+    }else if(P.stage==="r"){
+      if(!P.r.score){err("Pick a number from 1 to 10."); return;}
+      P.stage="o"; drawPurpose();
+    }else if(P.stage==="o"){
+      if(P.chosen<0||!(P.o[P.chosen]||{}).t){err("Add and rate an option, then pick one."); return;}
+      P.stage="w"; drawPurpose();
+    }else if(P.stage==="w"){
+      if(!String(P.w.step||"").trim()){err("Write your first step."); return;}
+      if(!P.w.commit){err("Pick how committed you are."); return;}
+      finishPurpose(); return;
+    }
+    document.getElementById("guide").scrollIntoView({behavior:"smooth",block:"start"});
+  };
+}
+function finishPurpose(){
+  var ch=P.o[P.chosen].t, d=G.dot;
+  var opts=P.o.filter(function(o){return o.t;}).map(function(o){return {t:o.t,fit:o.fit||0,real:o.real||0,chosen:o.t===ch};});
+  var pur={statement:String(P.g.statement).trim(),values:P.g.values.slice(),meaning:P.g.meaning||"",flow:P.g.flow||"",known:P.g.known||"",measure:P.g.measure||"",
+    score:P.r.score,gap:P.r.gap||"",options:opts,chosen:ch,breaks:P.breaks||"",side:P.side||"",
+    step:String(P.w.step).trim(),when:P.w.when||"",obstacle:P.w.obstacle||"",plan:P.w.plan||"",support:P.w.support||"",commit:P.w.commit};
+  var qs=[];
+  if(+pur.commit<7) qs.push("You weren’t very committed to your step yet. What would make it small enough that you’d say 7 out of 10?");
+  qs.push("Which words in your purpose statement feel most true, and which feel borrowed?");
+  qs.push("Who is already doing work like this, and what could you learn from them?");
+  qs.push("What would you do this month if you were 10% braver?");
+  state.data={
+    title:"My purpose",
+    one_liner:pur.statement,
+    loops:d?[{name:"What keeps me where I am",type:d.type,steps:d.steps,signs:d.signs,story:d.type==="R"?"Each time round, this loop pulls you a little further from your purpose.":"This loop keeps you at the same level: every push gets pushed back."}]:[],
+    pattern:{name:"",plain:""},
+    leverage:[{where:ch,move:ch,first_step:pur.step+(pur.when?" ("+pur.when+")":""),strength:""}],
+    questions:qs, facts_to_check:[], care_note:"", purpose:pur
+  };
+  state.mind=mindCount(G.mind)?G.mind:null; state.dots=d?(G.dotsGraph||null):null;
+  state.ownLoop={frame:"grow",
+    struggle:"Finding my work purpose. Draft purpose: "+pur.statement+" Values: "+pur.values.join(", ")+". How close today: "+pur.score+"/10. Biggest gap: "+pur.gap+". Chosen option: "+ch+"."+mindSummary(G.mind),
+    steps:d?d.steps:["Work today ("+pur.score+"/10)","My purpose"],type:d?d.type:"B",pattern:"",lever:ch,action:pur.step,confidence:String(pur.commit)};
+  state.coach=null; state.savedId=null; state.answers={}; state.ci={}; state.qaHist=[]; state.sharpened=0; state.askText=G.struggle||"";
+  state.isSample=false; state.isOwn=true; state.view="simple";
+  document.getElementById("guide").hidden=true; render();
+  document.getElementById("result").scrollIntoView({behavior:"smooth",block:"start"});
+}
+function purposeView(d,detail){
+  var p=d.purpose, h='<div class="card"><span class="eyebrow">My purpose</span><p class="pstate">'+esc(p.statement)+'</p>'
+   +(p.values.length?'<div class="chips">'+p.values.map(function(v){return '<span class="tag deep">'+esc(v)+'</span>';}).join("")+'</div>':'')
+   +'<p class="first">How close my work is today: <b>'+p.score+' out of 10</b></p><div class="meter" aria-hidden="true"><span style="width:'+(p.score*10)+'%"></span></div>'
+   +(p.gap?'<p class="first">The biggest gap: '+esc(p.gap)+'</p>':'')
+   +(detail&&(p.flow||p.known||p.measure)?'<ul class="plain">'+(p.flow?'<li>I lose track of time when I '+esc(lowerFirst(p.flow))+'</li>':'')+(p.known?'<li>People come to me for '+esc(lowerFirst(p.known))+'</li>':'')+(p.measure?'<li>I’ll know I’m there when '+esc(lowerFirst(p.measure))+'</li>':'')+'</ul>':'')
+   +'</div>';
+  if((d.loops||[]).length) h+='<div class="card'+(detail?'':' simple')+'"><span class="eyebrow" style="font-family:var(--body)">What keeps me where I am</span><div class="ringwrap">'+ring(d.loops[0],{hand:!detail})+'</div></div>';
+  var opts=p.options.slice().sort(function(a,b){return (b.fit*2+b.real)-(a.fit*2+a.real);});
+  h+='<div class="card"><span class="eyebrow">My options</span><div class="ringwrap"><table class="ptable"><thead><tr><th>Option</th><th>Fits purpose</th><th>Realistic</th></tr></thead><tbody>'
+   +opts.map(function(o){return '<tr'+(o.chosen?' class="on"':'')+'><td>'+(o.chosen?'<b>✓ '+esc(o.t)+'</b>':esc(o.t))+'</td><td>'+(LVL[o.fit]||"")+'</td><td>'+(LVL[o.real]||"")+'</td></tr>';}).join("")
+   +'</tbody></table></div>'
+   +(p.breaks&&p.breaks!=="Not sure"?'<p class="first"><b>Systems check:</b> it changes “'+esc(p.breaks)+'” in my loop.'+(p.side?' It may also affect: '+esc(p.side):'')+'</p>':p.side?'<p class="first"><b>It may also affect:</b> '+esc(p.side)+'</p>':'')
+   +'</div>';
+  h+='<div class="card"><span class="eyebrow">Way forward</span><div class="breakit" style="font-family:var(--body);font-size:15px"><b>First step:</b> '+esc(p.step)+(p.when?' · <b>When:</b> '+esc(p.when):'')+'</div>'
+   +'<ul class="plain">'+(p.obstacle?'<li><b>If it gets hard</b> ('+esc(p.obstacle)+'): '+esc(p.plan||"—")+'</li>':'')+(p.support?'<li><b>Support:</b> '+esc(p.support)+'</li>':'')+'<li><b>Commitment:</b> '+esc(p.commit)+' out of 10</li></ul></div>';
+  if(detail) h+=mindCard()+dotsCard();
+  return h;
+}
+function drawEvolve(){
+  if(state.isSample||!state.data||state.data.purpose||!(state.data.loops||[]).length) return;
+  var wrap=document.querySelector("#result .wrap"); if(!wrap) return;
+  var card=document.createElement("section"); card.className="card"; card.id="evolve";
+  card.innerHTML='<span class="eyebrow">Take it further</span><h3>Is this really about your work or direction?</h3>'
+    +'<p class="first">Find my purpose takes the loop you’ve mapped into a GROW session: Goal, Reality, Options, Way forward.</p>'
+    +'<div class="row"><button class="btn" id="evgo">Find my purpose from this loop</button></div>';
+  wrap.appendChild(card);
+  document.getElementById("evgo").onclick=function(){
+    if(!agreedOk()) return;
+    var L=state.data.loops[0]; setMode("purpose");
+    startPurpose(state.askText||(state.ownLoop&&state.ownLoop.struggle)||state.data.title,
+      {dot:{steps:L.steps.slice(0,5),signs:(L.signs||[]).slice(0,5),type:L.type},graph:state.isOwn?state.dots:null});
+  };
 }
 
 document.getElementById("stop").onclick=function(){if(state.ctl)state.ctl.abort();};
