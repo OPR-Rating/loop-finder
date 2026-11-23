@@ -117,6 +117,10 @@ ul.plain{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
 .dotswrap{border:1px dashed var(--line);border-radius:14px;background:var(--bg);overflow:hidden}
 .dsvg{width:100%;max-width:520px;height:auto;display:block;margin:0 auto;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 .dtools{display:flex;flex-direction:column;gap:8px}
+.swatch{display:inline-flex;align-items:center;gap:6px}
+.swatch span{width:14px;height:14px;border-radius:50%;display:inline-block;border:1px solid var(--line)}
+#dwrap{height:min(65vh,600px)}
+#dwrap .dsvg{width:100%;height:100%;max-width:none}
 .zoomrow .btn{padding:8px 14px;min-width:44px}
 .modes{display:grid;grid-template-columns:repeat(3,1fr);border-radius:14px;align-self:stretch}
 .modes button{border-radius:10px;padding:8px 6px;font-size:13px;line-height:1.2}
@@ -731,6 +735,7 @@ function remindIcs(){
 
 
 /* ---------- Connect the dots: people draw their own cause-and-effect arrows ---------- */
+var ACOL={ink:["var(--ink)","Black"],red:["var(--r)","Red"],blue:["var(--b)","Blue"],green:["var(--accent)","Green"],amber:["var(--note)","Amber"],purple:["var(--violet)","Purple"]};
 var DW=360, DH=480, PW=116, PH=46, MAXPILLS=14;
 var D=null, drag=null;
 function qIndex(k){for(var i=0;i<QS.length;i++){if(QS[i].k===k) return i;} return 0;}
@@ -744,7 +749,7 @@ function startDots(){
       return {id:"n"+i,label:t,x:clampX(DW/2+114*Math.cos(a)),y:clampY(DH/2+200*Math.sin(a))};}),
       edges:[],seq:n+1};
   }
-  D=G.dots; D.view=D.view||{x:0,y:0,w:DW,h:DH}; D.mode=D.mode||"draw"; D.sel=null; D.pending=null; D.hi=-1;
+  D=G.dots; D.view=D.view||null; D.mode=D.mode||"draw"; D.sel=null; D.pending=null; D.hi=-1;
   G.stage="dots"; drawDots();
   document.getElementById("guide").scrollIntoView({behavior:"smooth",block:"start"});
 }
@@ -792,14 +797,14 @@ function dotsSvg(g,opt){
   opt=opt||{}; var hiIds=opt.hiIds||[], live=opt.interactive;
   var hiEdge=function(e){var i=hiIds.indexOf(e.from); return i>=0&&hiIds[(i+1)%hiIds.length]===e.to&&hiIds.length>1;};
   var out='<svg id="'+(live?'dsvg':'')+'" class="dsvg" viewBox="'+vbStr(live?D.view:fitView(g))+'" role="img" aria-label="Your connections: '+g.edges.length+' arrows">'
-   +'<defs><marker id="da-ink'+(live?'':'s')+'" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1L10 5L0 9z" fill="var(--ink)"/></marker>'
+   +'<defs>'+Object.keys(ACOL).map(function(k){return '<marker id="da-'+k+(live?'':'s')+'" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1L10 5L0 9z" fill="'+ACOL[k][0]+'"/></marker>';}).join("")
    +'<marker id="da-hi'+(live?'':'s')+'" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1L10 5L0 9z" fill="var(--accent)"/></marker></defs>';
   g.edges.forEach(function(e){
     var ge=edgeGeom(g,e), hi=hiEdge(e), sel=live&&D.sel&&D.sel.t==="edge"&&D.sel.id===e.id;
-    var col=hi?"var(--accent)":sel?"var(--b)":"var(--ink)";
+    var ck=ACOL[e.color]?e.color:"ink", col=hi?"var(--accent)":ACOL[ck][0];
     out+='<g'+(live?' data-edge="'+e.id+'"':'')+'>';
     if(live) out+='<path d="'+ge.d+'" fill="none" stroke="transparent" stroke-width="22"/>';
-    out+='<path d="'+ge.d+'" fill="none" stroke="'+col+'" stroke-width="'+(hi||sel?3.2:2.2)+'" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#'+(hi?'da-hi':'da-ink')+(live?'':'s')+')"/>';
+    out+='<path d="'+ge.d+'" fill="none" stroke="'+col+'" stroke-width="'+(hi||sel?3.4:2.4)+'"'+(sel?' stroke-dasharray="7 5"':'')+' stroke-linecap="round" stroke-linejoin="round" marker-end="url(#'+(hi?'da-hi':'da-'+ck)+(live?'':'s')+')"/>';
     out+='<circle cx="'+ge.lx.toFixed(1)+'" cy="'+ge.ly.toFixed(1)+'" r="11" fill="var(--card)" stroke="'+col+'" stroke-width="1.6"/>'
       +'<text x="'+ge.lx.toFixed(1)+'" y="'+(ge.ly+5.5).toFixed(1)+'" text-anchor="middle" font-size="16" font-weight="700" font-family="Inter, system-ui, sans-serif" fill="'+col+'">'+(e.sign==="-"?"−":"+")+'</text></g>';
   });
@@ -834,7 +839,7 @@ function drawDots(){
   document.getElementById("dm-draw").onclick=function(){D.mode="draw"; D.sel=null; D.pending=null; paintDots();};
   document.getElementById("dz-in").onclick=function(){zoomBy(1/1.25); viewApply(document.getElementById("dsvg"));};
   document.getElementById("dz-out").onclick=function(){zoomBy(1.25); viewApply(document.getElementById("dsvg"));};
-  document.getElementById("dz-fit").onclick=function(){D.view=fitView(D); viewApply(document.getElementById("dsvg"));};
+  document.getElementById("dz-fit").onclick=function(){D.view=fitView(D,aspect()); viewApply(document.getElementById("dsvg"));};
   document.getElementById("dm-move").onclick=function(){D.mode="move"; D.sel=null; D.pending=null; paintDots();};
   var addIt=function(){var i=document.getElementById("dadd"), v=i.value.trim(); if(!v) return;
     if(D.nodes.length>=MAXPILLS){document.getElementById("dhint").textContent="That's plenty. Remove something first to add more."; return;}
@@ -846,22 +851,26 @@ function drawDots(){
   paintDots();
 }
 function paintDots(){
+  if(!D.view) D.view=fitView(D,aspect());
+  var a=aspect(), cy=D.view.y+D.view.h/2; D.view.h=D.view.w*a; D.view.y=cy-D.view.h/2;
   var cyc=findCycles(D); if(D.hi>=cyc.length) D.hi=-1;
   document.getElementById("dwrap").innerHTML=dotsSvg(D,{interactive:true,hiIds:D.hi>=0?cyc[D.hi].ids:[]});
   document.getElementById("dm-draw").setAttribute("aria-pressed",D.mode==="draw");
   document.getElementById("dm-move").setAttribute("aria-pressed",D.mode==="move");
   document.getElementById("dhint").textContent=!D.nodes.length?"Add a few things below first, like “Stress”, “Spending”, “Debt”."
-    :D.mode==="draw"?(D.pending?"Now tap what it causes.":"Drag your finger from one thing to what it causes. Or tap one, then the other.")
+    :D.mode==="draw"?(D.pending?"Now tap what it causes, or remove it below.":"Drag your finger from one thing to what it causes. Or tap one, then the other. Tap an arrow to change it.")
     :"Drag things around to tidy your map. Tap one to remove it.";
   var t="", s=D.sel;
   if(s&&s.t==="edge"){var e=D.edges.filter(function(x){return x.id===s.id;})[0];
     if(e){t='<p class="first"><b>'+esc(dNode(D,e.from).label)+'</b> → <b>'+esc(dNode(D,e.to).label)+'</b>: when the first goes up, the second…</p><div class="chips">'
-      +'<button class="chip" data-sign="+" aria-pressed="'+(e.sign==="+")+'">+ goes up too</button><button class="chip" data-sign="-" aria-pressed="'+(e.sign==="-")+'">− goes down</button><button class="chip" id="drem">Remove arrow</button></div>';}}
-  else if(s&&s.t==="node"){var n=dNode(D,s.id); if(n) t='<div class="chips"><button class="chip" id="dremn">Remove “'+esc(cut(n.label,20))+'”</button></div>';}
+      +'<button class="chip" data-sign="+" aria-pressed="'+(e.sign==="+")+'">+ goes up too</button><button class="chip" data-sign="-" aria-pressed="'+(e.sign==="-")+'">− goes down</button><button class="chip" id="drem">Remove arrow</button></div>'
+      +'<p class="first">Colour</p><div class="chips">'+Object.keys(ACOL).map(function(k){return '<button class="chip swatch" data-ecol="'+k+'" aria-pressed="'+((e.color||"ink")===k)+'" aria-label="'+ACOL[k][1]+'"><span style="background:'+ACOL[k][0]+'"></span>'+ACOL[k][1]+'</button>';}).join("")+'</div>';}}
+  else if((s&&s.t==="node")||D.pending){var n=dNode(D,s&&s.t==="node"?s.id:D.pending); if(n) t='<div class="chips"><button class="chip" id="dremn">Remove “'+esc(cut(n.label,20))+'”</button></div>';}
   document.getElementById("dtools").innerHTML=t;
   Array.prototype.forEach.call(document.querySelectorAll("[data-sign]"),function(b){b.onclick=function(){var e=D.edges.filter(function(x){return x.id===D.sel.id;})[0]; if(e) e.sign=b.dataset.sign; paintDots();};});
   var rb=document.getElementById("drem"); if(rb) rb.onclick=function(){D.edges=D.edges.filter(function(x){return x.id!==D.sel.id;}); D.sel=null; paintDots();};
-  var rn=document.getElementById("dremn"); if(rn) rn.onclick=function(){var id=D.sel.id; D.nodes=D.nodes.filter(function(x){return x.id!==id;}); D.edges=D.edges.filter(function(x){return x.from!==id&&x.to!==id;}); D.sel=null; paintDots();};
+  Array.prototype.forEach.call(document.querySelectorAll("[data-ecol]"),function(b){b.onclick=function(){var e=D.edges.filter(function(x){return x.id===D.sel.id;})[0]; if(e) e.color=b.dataset.ecol; paintDots();};});
+  var rn=document.getElementById("dremn"); if(rn) rn.onclick=function(){var id=D.sel&&D.sel.t==="node"?D.sel.id:D.pending; D.pending=null; D.nodes=D.nodes.filter(function(x){return x.id!==id;}); D.edges=D.edges.filter(function(x){return x.from!==id&&x.to!==id;}); D.sel=null; paintDots();};
   var L;
   if(!cyc.length){
     L='<span class="eyebrow">Loops you found</span><p class="first">None yet. Keep drawing: when your arrows come back round to where they started, you’ve found a loop.</p>';
@@ -891,21 +900,23 @@ function addEdge(from,to,pts){
   D.sel={t:"edge",id:e.id};
 }
 function vbStr(v){return v.x.toFixed(1)+" "+v.y.toFixed(1)+" "+v.w.toFixed(1)+" "+v.h.toFixed(1);}
-function fitView(g){
+function aspect(){var e=document.getElementById("dwrap"); if(!e) return DH/DW; var r=e.getBoundingClientRect(); return r.width&&r.height?r.height/r.width:DH/DW;}
+function fitView(g,asp){
   if(!g.nodes.length) return {x:0,y:0,w:DW,h:DH};
   var x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;
   g.nodes.forEach(function(n){x0=Math.min(x0,n.x-PW/2);y0=Math.min(y0,n.y-PH/2);x1=Math.max(x1,n.x+PW/2);y1=Math.max(y1,n.y+PH/2);});
   var pad=28, w=x1-x0+2*pad, h=y1-y0+2*pad;
-  if(w/h<DW/DH) w=h*DW/DH; w=Math.max(w,240); h=w*DH/DW;
+  var a=asp||DH/DW; if(h/w>a) w=h/a; w=Math.max(w,240); h=w*a;
   var cx=(x0+x1)/2, cy=(y0+y1)/2; return {x:cx-w/2,y:cy-h/2,w:w,h:h};
 }
 function viewApply(svg){if(svg) svg.setAttribute("viewBox",vbStr(D.view));}
 function zoomBy(f,cx,cy){
   var v=D.view, nw=Math.max(160,Math.min(1600,v.w*f)), k=nw/v.w;
   if(cx==null){cx=v.x+v.w/2; cy=v.y+v.h/2;}
-  v.x=cx-(cx-v.x)*k; v.y=cy-(cy-v.y)*k; v.w=nw; v.h=nw*DH/DW;
+  v.x=cx-(cx-v.x)*k; v.y=cy-(cy-v.y)*k; v.w=nw; v.h=nw*aspect();
 }
 var ptrs={}, pinch=null;
+window.addEventListener("resize",function(){var svg=document.getElementById("dsvg"); if(!svg||!D||!D.view) return; var a=aspect(), cy=D.view.y+D.view.h/2; D.view.h=D.view.w*a; D.view.y=cy-D.view.h/2; viewApply(svg);});
 function wireDots(){
   var svg=document.getElementById("dsvg"); if(!svg) return;
   ptrs={}; pinch=null;
@@ -937,7 +948,7 @@ function wireDots(){
     if(pinch){
       var ids=Object.keys(ptrs); if(ids.length<2) return;
       var a=ptrs[ids[0]], b=ptrs[ids[1]], d=Math.hypot(a.x-b.x,a.y-b.y)||1, m={x:(a.x+b.x)/2,y:(a.y+b.y)/2}, r=pinch.r, v0=pinch.v0;
-      var nw=Math.max(160,Math.min(1600,v0.w*pinch.d0/d)), nh=nw*DH/DW;
+      var nw=Math.max(160,Math.min(1600,v0.w*pinch.d0/d)), nh=nw*aspect();
       var wx=v0.x+(pinch.m0.x-r.left)/r.width*v0.w, wy=v0.y+(pinch.m0.y-r.top)/r.height*v0.h;
       D.view={x:wx-(m.x-r.left)/r.width*nw,y:wy-(m.y-r.top)/r.height*nh,w:nw,h:nh}; viewApply(svg); return;
     }
