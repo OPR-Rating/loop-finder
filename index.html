@@ -34,6 +34,14 @@ textarea{font:inherit;width:100%;min-height:96px;border:1px solid var(--line);bo
 textarea:focus-visible,.btn:focus-visible,.chip:focus-visible,.seg button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
 .chip{font:inherit;font-size:13px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;padding:6px 12px;cursor:pointer}
+[hidden]{display:none!important}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+.grow button{font:inherit;font-size:12px;border:0;cursor:pointer;text-align:center;padding:6px 2px;border-radius:8px;background:var(--accent-soft);color:var(--accent);font-weight:600;line-height:1.2;text-decoration:underline}
+.focusbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 14px;position:sticky;top:env(safe-area-inset-top,0px);z-index:5}
+.focusbar b{display:block;font-size:15px}
+.scr-guide #before,.scr-guide #askcard,.scr-guide #myloops,.scr-guide #result,.scr-guide #sources,
+.scr-result #before,.scr-result #askcard,.scr-result #myloops,.scr-result #guide,.scr-result #sources,
+.scr-guide header .lede,.scr-result header .lede{display:none!important}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 .btn{font:inherit;font-weight:600;border-radius:12px;padding:11px 18px;cursor:pointer;border:1px solid var(--line);background:var(--card);color:var(--ink)}
 .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
@@ -138,14 +146,16 @@ ul.plain{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
     <p class="lede">Tell it what you're struggling with. Find the circle you're stuck in, see it simply or in detail, and spot where a small push changes the most. Let the app map it for you, or think it through yourself, step by step.</p>
   </header>
 
-  <section class="card" aria-labelledby="beforeh">
+  <div id="focusbar" class="focusbar" hidden><div><span class="eyebrow">Working on</span><b id="focuslabel"></b></div><div class="row" id="focusact"></div></div>
+
+  <section class="card" id="before" aria-labelledby="beforeh">
     <span class="eyebrow" id="beforeh">Before you start</span>
     <label class="consent" for="agree"><input type="checkbox" id="agree"><span>I understand that Loop Finder is a thinking tool, <b>not</b> therapy, counselling or professional advice, and that the people behind it are not psychologists, doctors or licensed advisers.</span></label>
   </section>
 
   <section class="card" id="myloops" hidden></section>
 
-  <section class="card" aria-labelledby="askh">
+  <section class="card" id="askcard" aria-labelledby="askh">
     <div class="seg modes" role="group" aria-label="How do you want to work?"><button id="m-ai" aria-pressed="true">Map it for me</button><button id="m-self" aria-pressed="false">Think it through myself</button><button id="m-purpose" aria-pressed="false">Find my purpose</button></div>
     <p class="first" id="modeline">The app reads what you write and draws your loop in about a minute.</p>
     <label class="eyebrow" id="askh" for="ask">What are you struggling with?</label>
@@ -164,7 +174,7 @@ ul.plain{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
 
   <div id="result"></div>
 
-  <section class="card">
+  <section class="card" id="sources">
     <span class="eyebrow">Where the answers come from</span>
     <h2>Four sources, one map</h2>
     <div class="layers">
@@ -309,7 +319,7 @@ document.getElementById("go").onclick=async function(){
     var d=null; try{d=await r.json();}catch(e){}
     if(!r.ok||!valid(d)){var code=(d&&d.error)||"garbled"; setBusy(false,MSG[code]||"Something went wrong. Press Find my loop to try again.",true); return;}
     state.data=d; state.isSample=false; state.askText=text; state.qaHist=[]; state.sharpened=0; state.isOwn=false; state.coach=null; state.mind=null; state.dots=null; state.ownLoop=null; state.savedId=null; state.answers={}; state.ci={}; state.view="simple"; setBusy(false,"");
-    render(); document.getElementById("result").scrollIntoView({behavior:"smooth",block:"start"});
+    render(); setScreen("result","Your map");
   }catch(e){
     if(e&&e.name==="AbortError"){setBusy(false,"Stopped.");return;}
     setBusy(false,"Couldn't reach Loop Finder. Check your internet and try again.",true);
@@ -375,7 +385,7 @@ function stepsNow(){if(G.dot) return G.dot.steps.slice(); return ["a","b","c","d
 function startGuide(text){
   FLOW="think";
   G={i:0,ans:{},struggle:text,stage:"mind",mind:mindEmpty()}; G.mind.center=cut(text,60); drawMind();
-  var g=document.getElementById("guide"); g.hidden=false; g.scrollIntoView({behavior:"smooth",block:"start"});
+  var g=document.getElementById("guide"); g.hidden=false; setScreen("guide","Think it through myself");
 }
 function drawGuide(){
   var Q=QS[G.i], g=document.getElementById("guide"), val=G.ans[Q.k]||"";
@@ -429,7 +439,7 @@ function finishGuide(){
   state.coach=null; state.savedId=null; state.answers={}; state.ci={}; state.qaHist=[]; state.sharpened=0; state.askText="";
   state.isSample=false; state.isOwn=true; state.view="simple";
   document.getElementById("guide").hidden=true; render();
-  document.getElementById("result").scrollIntoView({behavior:"smooth",block:"start"});
+  setScreen("result",state.data.purpose?"Your purpose map":"Your loop");
 }
 
 
@@ -635,7 +645,7 @@ function openLoop(id,toCheckin){
   var it=loadLoops().filter(function(x){return x.id===id;})[0]; if(!it) return;
   state.data=it.data; state.mind=it.mind||null; state.askText=it.askText||""; state.qaHist=it.qaHist||[]; state.sharpened=it.sharpened||0; state.dots=it.dots||null; state.ownLoop=it.ownLoop||null; state.isOwn=!!it.isOwn;
   state.isSample=false; state.answers=it.answers||{}; state.savedId=id; state.coach=null; state.ci={}; state.view="simple";
-  document.getElementById("guide").hidden=true; render();
+  document.getElementById("guide").hidden=true; render(); setScreen("result","Saved: "+it.title);
   var t=document.getElementById(toCheckin?"checkin":"result"); if(t) t.scrollIntoView({behavior:"smooth",block:"start"});
 }
 
@@ -1010,15 +1020,19 @@ function brOf(m){return m&&m._set==="work"?BR_WORK:BR_THINK;}
 function lowerFirst(t){t=String(t||"").trim(); return t?t.charAt(0).toLowerCase()+t.slice(1):t;}
 function growBar(k){
   var st=[["g","Goal"],["r","Reality"],["o","Options"],["w","Way forward"]], i=st.map(function(x){return x[0];}).indexOf(k);
-  return '<div class="grow" aria-label="GROW stage: '+st[i][1]+'">'+st.map(function(x,j){return '<span class="'+(j===i?'on':j<i?'done':'')+'">'+x[0].toUpperCase()+' · '+x[1]+'</span>';}).join("")+'</div>';
+  var reached=P?Math.max(P.reached||0,i):i;
+  return '<div class="grow" aria-label="GROW stage: '+st[i][1]+'">'+st.map(function(x,j){
+    var label=x[0].toUpperCase()+' \u00b7 '+x[1];
+    if(j!==i&&j<=reached) return '<button type="button" data-gostage="'+x[0]+'" aria-label="Go to '+x[1]+'">'+label+'</button>';
+    return '<span class="'+(j===i?'on':j<i?'done':'')+'">'+label+'</span>';}).join("")+'</div>';
 }
 function startPurpose(text,from){
   FLOW="purpose";
-  P={stage:"g",g:{values:[]},r:{},o:[{t:""},{t:""},{t:""}],w:{},chosen:-1,carried:!!from};
+  P={stage:"g",reached:0,g:{values:[]},r:{},o:[{t:""},{t:""},{t:""}],w:{},chosen:-1,carried:!!from};
   G={i:0,ans:{},struggle:text||"",stage:"p",mind:mindEmpty("work"),dots:null,dot:null};
   G.mind.center="My work today";
   if(from){G.dot=from.dot; G.dotsGraph=from.graph||null;}
-  var g=document.getElementById("guide"); g.hidden=false; drawPurpose(); g.scrollIntoView({behavior:"smooth",block:"start"});
+  var g=document.getElementById("guide"); g.hidden=false; drawPurpose(); setScreen("guide","Find my purpose (GROW)");
 }
 function purposeAfterLoop(){FLOW="purpose"; P.stage="r"; drawPurpose(); document.getElementById("guide").scrollIntoView({behavior:"smooth",block:"start"});}
 function pField(k,label,hint,val,store){
@@ -1032,6 +1046,7 @@ function draftStatement(){
 }
 function drawPurpose(){
   var g=document.getElementById("guide"), h="", s=P.stage;
+  P.reached=Math.max(P.reached||0,["g","r","o","w"].indexOf(s));
   if(s==="g"){
     h=growBar("g")+'<span class="eyebrow">Goal · what do you want from your work?</span>'
      +'<p class="gq">Start with where you want to go, not where you are.</p>'
@@ -1158,7 +1173,7 @@ function finishPurpose(){
   state.coach=null; state.savedId=null; state.answers={}; state.ci={}; state.qaHist=[]; state.sharpened=0; state.askText=G.struggle||"";
   state.isSample=false; state.isOwn=true; state.view="simple";
   document.getElementById("guide").hidden=true; render();
-  document.getElementById("result").scrollIntoView({behavior:"smooth",block:"start"});
+  setScreen("result",state.data.purpose?"Your purpose map":"Your loop");
 }
 function purposeView(d,detail){
   var p=d.purpose, h='<div class="card"><span class="eyebrow">My purpose</span><p class="pstate">'+esc(p.statement)+'</p>'
@@ -1194,6 +1209,43 @@ function drawEvolve(){
       {dot:{steps:L.steps.slice(0,5),signs:(L.signs||[]).slice(0,5),type:L.type},graph:state.isOwn?state.dots:null});
   };
 }
+
+
+/* ---------- One section at a time: home, working (guide), or a finished map ---------- */
+var leaving=false;
+function setScreen(sc,label){
+  var b=document.body; b.classList.remove("scr-guide","scr-result"); if(sc!=="home") b.classList.add("scr-"+sc);
+  document.getElementById("focusbar").hidden=(sc==="home");
+  if(label) document.getElementById("focuslabel").textContent=label;
+  leaving=false; paintFocus();
+  window.scrollTo({top:0,behavior:"smooth"});
+}
+function goHome(){
+  FLOW="think"; document.getElementById("guide").hidden=true;
+  state.data=SAMPLE; state.isSample=true; state.isOwn=false; state.savedId=null; state.coach=null; state.ownLoop=null;
+  state.mind=null; state.dots=null; state.answers={}; state.qaHist=[]; state.sharpened=0; state.view="simple";
+  render(); drawMyLoops(); setScreen("home");
+}
+function paintFocus(){
+  var x=document.getElementById("focusact"), inGuide=document.body.classList.contains("scr-guide");
+  x.innerHTML=leaving
+    ?'<span class="first">'+(inGuide?'You’ll lose what you’ve done so far.':'This map isn’t saved yet.')+'</span>'
+      +(inGuide?'':'<button class="btn primary" id="fsave">Save and leave</button>')
+      +'<button class="btn" id="fleave">Leave'+(inGuide?'':' without saving')+'</button><button class="btn" id="fstay">Stay</button>'
+    :'<button class="btn" id="fexit">'+(inGuide?'Exit':'Start something new')+'</button>';
+  var b;
+  if((b=document.getElementById("fexit"))) b.onclick=function(){
+    if(inGuide||(!state.isSample&&!state.savedId)){leaving=true; paintFocus();} else goHome();
+  };
+  if((b=document.getElementById("fstay"))) b.onclick=function(){leaving=false; paintFocus();};
+  if((b=document.getElementById("fleave"))) b.onclick=goHome;
+  if((b=document.getElementById("fsave"))) b.onclick=function(){var k=document.getElementById("ksave"); if(k) k.click(); goHome();};
+}
+document.getElementById("guide").addEventListener("click",function(e){
+  var b=e.target.closest("[data-gostage]"); if(!b||FLOW!=="purpose"||!P) return;
+  P.stage=b.getAttribute("data-gostage"); drawPurpose();
+  document.getElementById("guide").scrollIntoView({behavior:"smooth",block:"start"});
+});
 
 document.getElementById("stop").onclick=function(){if(state.ctl)state.ctl.abort();};
 document.getElementById("examples").innerHTML=EXAMPLES.map(function(x,i){var short=TOPICS[i][0];return '<button class="chip" data-ex="'+i+'">'+short+'</button>';}).join("");
